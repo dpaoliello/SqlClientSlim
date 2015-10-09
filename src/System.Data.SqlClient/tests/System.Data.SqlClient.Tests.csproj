@@ -1,0 +1,33 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="12.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003" DefaultTargets="Build">
+  <Import Project="..\..\dir.props" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <OutputType>Library</OutputType>
+    <AssemblyName>System.Data.SqlClient.Tests</AssemblyName>
+    <AssemblyVersion>4.0.0.0</AssemblyVersion>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <PackageTargetFramework>dotnet</PackageTargetFramework>
+    <UsePackageTargetRuntimeDefaults>true</UsePackageTargetRuntimeDefaults>
+    <ExcludeResourcesImport>true</ExcludeResourcesImport>
+    <ProjectGuid>{BE51A9B7-B43D-4B00-826B-7E49E648E1F2}</ProjectGuid>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="SqlConnectionTests.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="project.json" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\src\System.Data.SqlClient.csproj">
+      <Project>{d4550556-4745-457f-ba8f-3ebf3836d6b4}</Project>
+      <Name>System.Data.SqlClient</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <Import Project="..\..\dir.targets" />
+</Project>

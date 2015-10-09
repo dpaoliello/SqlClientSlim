@@ -1,2 +1,8 @@
+# Built binaries and objects
 bin/
+
+# NuGet Packages
 packages/
+
+# Visual Studio temp files
+.vs/

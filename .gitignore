@@ -3,6 +3,7 @@ bin/
 
 # NuGet Packages
 packages/
+*.nupkg
 
 # Visual Studio temp files
 .vs/

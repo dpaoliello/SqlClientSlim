@@ -36,7 +36,6 @@
         <dependency id="System.Globalization" version="4.0.10" />
         <dependency id="System.IO" version="4.0.10" />
         <dependency id="System.IO.FileSystem" version="4.0.0" />
-        <dependency id="System.Linq" version="4.0.0" />
         <dependency id="System.Net.Primitives" version="4.0.10" />
         <dependency id="System.Net.Security" version="4.0.0-beta-23225" />
         <dependency id="System.Net.Sockets" version="4.1.00-beta-23225" />

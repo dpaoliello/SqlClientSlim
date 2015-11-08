@@ -9,8 +9,6 @@ using System.Collections.Generic;
 using System.Data.Common;
 using System.Diagnostics;
 using System.Globalization;
-using System.Linq;
-using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Text;
@@ -4197,7 +4195,12 @@ namespace System.Data.SqlClient
 
             internal void PushBuffer(byte[] buffer, int read)
             {
-                Debug.Assert(!_snapshotInBuffs.Any(b => object.ReferenceEquals(b, buffer)));
+#if DEBUG
+                foreach (var snapshot in _snapshotInBuffs)
+                {
+                    Debug.Assert(!object.ReferenceEquals(snapshot, buffer));
+                }
+#endif
 
                 PacketData packetData = new PacketData();
                 packetData.Buffer = buffer;

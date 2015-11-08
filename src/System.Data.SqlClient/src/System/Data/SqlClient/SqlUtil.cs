@@ -805,6 +805,19 @@ namespace System.Data.SqlClient
         // constant strings
         internal const string Transaction = "Transaction";
         internal const string Connection = "Connection";
+
+        internal static bool Contains(this string[] items, string target, StringComparer comparer)
+        {
+            foreach (var item in items)
+            {
+                if (comparer.Compare(item, target) == 0)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
     }
 
     sealed internal class SQLMessage

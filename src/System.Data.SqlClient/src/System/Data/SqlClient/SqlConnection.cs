@@ -390,7 +390,6 @@ namespace System.Data.SqlClient
             return BeginTransaction(IsolationLevel.Unspecified, transactionName);
         }
 
-        [SuppressMessage("Microsoft.Reliability", "CA2004:RemoveCallsToGCKeepAlive")]
         override protected DbTransaction BeginDbTransaction(IsolationLevel isolationLevel)
         {
             DbTransaction transaction = BeginTransaction(isolationLevel);

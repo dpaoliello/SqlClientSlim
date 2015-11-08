@@ -443,7 +443,6 @@ namespace System.Data.SqlClient
         ////////////////////////////////////////////////////////////////////////////////////////
         // GENERAL METHODS
         ////////////////////////////////////////////////////////////////////////////////////////
-        [SuppressMessage("Microsoft.Globalization", "CA1303:DoNotPassLiteralsAsLocalizedParameters")] // copied from Triaged.cs
         override protected void ChangeDatabaseInternal(string database)
         {
             // Add brackets around database
@@ -561,7 +560,6 @@ namespace System.Data.SqlClient
             }
         }
 
-        [SuppressMessage("Microsoft.Globalization", "CA1303:DoNotPassLiteralsAsLocalizedParameters")] // copied from Triaged.cs
         private void ResetConnection()
         {
             // For implicit pooled connections, if connection reset behavior is specified,

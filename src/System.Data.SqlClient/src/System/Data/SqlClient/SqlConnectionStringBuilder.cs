@@ -457,7 +457,6 @@ namespace System.Data.SqlClient
             }
         }
 
-        [SuppressMessage("Microsoft.Naming", "CA1704:IdentifiersShouldBeSpelledCorrectly", Justification = "Reviewed and Approved by UE")]
         public bool MultiSubnetFailover
         {
             get { return _multiSubnetFailover; }

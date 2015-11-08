@@ -6,16 +6,13 @@ namespace System.Data.SqlClient.Tests
 {
     public class SqlConnectionTests
     {
-        private const string SqlAuthConnectionString = "server=localhost;user id=sa;password=452g34f23t4324t2g43t;";
-        private const string IntegratedAuthConnectionString = "server=localhost;integrated security=true;";
-
         /// <summary>
         /// Verifies that connecting using SQL auth works
         /// </summary>
         [Fact]
         public async Task SqlAuthConnectionTest()
         {
-            using (var connection = new SqlConnection(SqlAuthConnectionString))
+            using (var connection = new SqlConnection(Utilities.SqlAuthConnectionString))
             {
                 await connection.OpenAsync();
             }
@@ -27,7 +24,7 @@ namespace System.Data.SqlClient.Tests
         [Fact]
         public async Task IntegratedAuthConnectionTest()
         {
-            using (var connection = new SqlConnection(IntegratedAuthConnectionString))
+            using (var connection = new SqlConnection(Utilities.IntegratedAuthConnectionString))
             {
                 await Assert.ThrowsAsync<PlatformNotSupportedException>(connection.OpenAsync);
             }
@@ -43,7 +40,7 @@ namespace System.Data.SqlClient.Tests
 
             for (int i = 0; i < 10; i++)
             {
-                using (var connection = new SqlConnection(SqlAuthConnectionString))
+                using (var connection = new SqlConnection(Utilities.SqlAuthConnectionString))
                 {
                     await connection.OpenAsync();
 
@@ -71,7 +68,7 @@ namespace System.Data.SqlClient.Tests
 
             for (int i = 0; i < iterations; i++)
             {
-                using (var connection = new SqlConnection(SqlAuthConnectionString + "pooling=false"))
+                using (var connection = new SqlConnection(Utilities.SqlAuthConnectionString + "pooling=false"))
                 {
                     await connection.OpenAsync();
                     Assert.DoesNotContain(connection.ClientConnectionId, observedConnectionIds);
@@ -83,7 +80,7 @@ namespace System.Data.SqlClient.Tests
         [Fact]
         public async Task MinPoolSizeTest()
         {
-            using (var connection = new SqlConnection(SqlAuthConnectionString + "min pool size = 2"))
+            using (var connection = new SqlConnection(Utilities.SqlAuthConnectionString + "min pool size = 2"))
             {
                 await connection.OpenAsync();
                 // TODO: How to verify this?

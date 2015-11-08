@@ -20,6 +20,8 @@
   <ItemGroup>
     <Compile Include="SqlConnectionStringBuilderTests.cs" />
     <Compile Include="SqlConnectionTests.cs" />
+    <Compile Include="SqlDataReaderTests.cs" />
+    <Compile Include="Utilities.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="project.json" />

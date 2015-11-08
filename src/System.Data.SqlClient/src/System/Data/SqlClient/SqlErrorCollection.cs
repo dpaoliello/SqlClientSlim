@@ -6,21 +6,22 @@
 //------------------------------------------------------------------------------
 
 using System.Collections;
+using System.Collections.Generic;
 
 
 namespace System.Data.SqlClient
 {
-    public sealed class SqlErrorCollection : ICollection
+    public sealed class SqlErrorCollection : ICollection, IReadOnlyList<SqlError>
     {
-        private ArrayList _errors = new ArrayList();
+        private List<SqlError> _errors = new List<SqlError>();
 
         internal SqlErrorCollection()
         {
         }
-
-        public void CopyTo(Array array, int index)
+        
+        void System.Collections.ICollection.CopyTo(Array array, int index)
         {
-            _errors.CopyTo(array, index);
+            _errors.CopyTo((SqlError[])array, index);
         }
 
         public void CopyTo(SqlError[] array, int index)
@@ -59,6 +60,11 @@ namespace System.Data.SqlClient
         internal void Add(SqlError error)
         {
             _errors.Add(error);
+        }
+
+        IEnumerator<SqlError> IEnumerable<SqlError>.GetEnumerator()
+        {
+            return ((IReadOnlyList<SqlError>)_errors).GetEnumerator();
         }
     }
 }

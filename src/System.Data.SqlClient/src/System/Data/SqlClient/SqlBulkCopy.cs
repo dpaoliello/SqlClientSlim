@@ -62,23 +62,14 @@ namespace System.Data.SqlClient
     }
 
     // the controlling class for one result (metadata + rows)
-    sealed internal class Result
+    sealed internal class Result : List<Row>
     {
-        private _SqlMetaDataSet _metadata;
-        private ArrayList _rowset;
+        private readonly _SqlMetaDataSet _metadata;
 
         internal Result(_SqlMetaDataSet metadata)
+            : base()
         {
             _metadata = metadata;
-            _rowset = new ArrayList();
-        }
-
-        internal int Count
-        {
-            get
-            {
-                return _rowset.Count;
-            }
         }
 
         internal _SqlMetaDataSet MetaData
@@ -88,40 +79,17 @@ namespace System.Data.SqlClient
                 return _metadata;
             }
         }
-
-        internal Row this[int index]
-        {
-            get
-            {
-                return (Row)_rowset[index];
-            }
-        }
-
-        internal void AddRow(Row row)
-        {
-            _rowset.Add(row);
-        }
     }
 
     // A wrapper object for metadata and rowsets returned by our initial queries
-    sealed internal class BulkCopySimpleResultSet
+    sealed internal class BulkCopySimpleResultSet : List<Result>
     {
-        private ArrayList _results;                   // the list of results
         private Result _resultSet;                     // the current result
         private int[] _indexmap;                       // associates columnids with indexes in the rowarray
 
         internal BulkCopySimpleResultSet()
+            : base()
         {
-            _results = new ArrayList();
-        }
-
-        // indexer
-        internal Result this[int idx]
-        {
-            get
-            {
-                return (Result)_results[idx];
-            }
         }
 
         // callback function for the tdsparser
@@ -129,7 +97,7 @@ namespace System.Data.SqlClient
         internal void SetMetaData(_SqlMetaDataSet metadata)
         {
             _resultSet = new Result(metadata);
-            _results.Add(_resultSet);
+            Add(_resultSet);
 
             _indexmap = new int[_resultSet.MetaData.Length];
             for (int i = 0; i < _indexmap.Length; i++)
@@ -150,7 +118,7 @@ namespace System.Data.SqlClient
         internal object[] CreateRowBuffer()
         {
             Row row = new Row(_resultSet.MetaData.Length);
-            _resultSet.AddRow(row);
+            _resultSet.Add(row);
             return row.DataFields;
         }
     }

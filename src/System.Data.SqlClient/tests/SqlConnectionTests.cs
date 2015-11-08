@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Threading.Tasks;
 using Xunit;
 
 namespace System.Data.SqlClient.Tests
@@ -6,16 +7,29 @@ namespace System.Data.SqlClient.Tests
     public class SqlConnectionTests
     {
         private const string SqlAuthConnectionString = "server=localhost;user id=sa;password=452g34f23t4324t2g43t;";
+        private const string IntegratedAuthConnectionString = "server=localhost;integrated security=true;";
 
         /// <summary>
-        /// Verifies that we can connect to a local SQL Server
+        /// Verifies that connecting using SQL auth works
         /// </summary>
         [Fact]
-        public void ConnectToLocalServerTest()
+        public async Task SqlAuthConnectionTest()
         {
             using (var connection = new SqlConnection(SqlAuthConnectionString))
             {
-                connection.OpenAsync().Wait();
+                await connection.OpenAsync();
+            }
+        }
+
+        /// <summary>
+        /// Verifies that connecting using integrated auth works
+        /// </summary>
+        [Fact]
+        public async Task IntegratedAuthConnectionTest()
+        {
+            using (var connection = new SqlConnection(IntegratedAuthConnectionString))
+            {
+                await Assert.ThrowsAsync<PlatformNotSupportedException>(connection.OpenAsync);
             }
         }
 
@@ -23,7 +37,7 @@ namespace System.Data.SqlClient.Tests
         /// Verifies that the same connect is returned every time if pooling is enabled
         /// </summary>
         [Fact]
-        public void ConnectionPoolTest()
+        public async Task ConnectionPoolTest()
         {
             Guid connectionId = Guid.Empty;
 
@@ -31,7 +45,7 @@ namespace System.Data.SqlClient.Tests
             {
                 using (var connection = new SqlConnection(SqlAuthConnectionString))
                 {
-                    connection.OpenAsync().Wait();
+                    await connection.OpenAsync();
 
                     // Check that the connection ids are the same every time
                     if (connectionId == Guid.Empty)
@@ -50,7 +64,7 @@ namespace System.Data.SqlClient.Tests
         /// Verifies that a different connection is returned every time if pooling is disabled
         /// </summary>
         [Fact]
-        public void NonConnectionPoolTest()
+        public async Task NonConnectionPoolTest()
         {
             const int iterations = 10;
             List<Guid> observedConnectionIds = new List<Guid>(iterations);
@@ -59,7 +73,7 @@ namespace System.Data.SqlClient.Tests
             {
                 using (var connection = new SqlConnection(SqlAuthConnectionString + "pooling=false"))
                 {
-                    connection.OpenAsync().Wait();
+                    await connection.OpenAsync();
                     Assert.DoesNotContain(connection.ClientConnectionId, observedConnectionIds);
                     observedConnectionIds.Add(connection.ClientConnectionId);
                 }
@@ -67,11 +81,11 @@ namespace System.Data.SqlClient.Tests
         }
 
         [Fact]
-        public void MinPoolSizeTest()
+        public async Task MinPoolSizeTest()
         {
             using (var connection = new SqlConnection(SqlAuthConnectionString + "min pool size = 2"))
             {
-                connection.OpenAsync().Wait();
+                await connection.OpenAsync();
                 // TODO: How to verify this?
             }
         }

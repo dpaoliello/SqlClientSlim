@@ -87,13 +87,11 @@ namespace System.Data.SqlClient.SNI
         /// </summary>
         /// <param name="handle">SNI connection handle</param>
         /// <param name="receivedBuff">Receive buffer</param>
-        /// <param name="receivedLength">Received length</param>
         /// <param name="sendBuff">Send buffer</param>
         /// <param name="sendLength">Send length</param>
         /// <param name="serverName">Service Principal Name buffer</param>
-        /// <param name="serverNameLength">Length of Service Principal Name</param>
         /// <returns>SNI error code</returns>
-        public uint GenSspiClientContext(SNIHandle handle, byte[] receivedBuff, uint receivedLength, byte[] sendBuff, ref uint sendLength, byte[] serverName, uint serverNameLength)
+        public uint GenSspiClientContext(SNIHandle handle, byte[] receivedBuff, byte[] sendBuff, ref uint sendLength, byte[] serverName)
         {
             throw new PlatformNotSupportedException();
         }
@@ -203,12 +201,11 @@ namespace System.Data.SqlClient.SNI
         /// <param name="ignoreSniOpenTimeout">Ignore open timeout</param>
         /// <param name="timerExpire">Timer expiration</param>
         /// <param name="instanceName">Instance name</param>
-        /// <param name="spnBuffer">SPN</param>
         /// <param name="flushCache">Flush packet cache</param>
         /// <param name="async">Asynchronous connection</param>
         /// <param name="parallel">Attempt parallel connects</param>
         /// <returns>SNI handle</returns>
-        public SNIHandle CreateConnectionHandle(object callbackObject, string fullServerName, bool ignoreSniOpenTimeout, long timerExpire, out byte[] instanceName, byte[] spnBuffer, bool flushCache, bool async, bool parallel)
+        public SNIHandle CreateConnectionHandle(object callbackObject, string fullServerName, bool ignoreSniOpenTimeout, long timerExpire, out byte[] instanceName, bool flushCache, bool async, bool parallel)
         {
             instanceName = new byte[1];
             instanceName[0] = 0;

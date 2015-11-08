@@ -767,10 +767,9 @@ namespace System.Data.SqlClient
             }
         }
 
-#if MANAGED_SNI
-        internal void CreateConnectionHandle(string serverName, bool ignoreSniOpenTimeout, long timerExpire, out byte[] instanceName, byte[] spnBuffer, bool flushCache, bool async, bool parallel)
+        internal void CreateConnectionHandle(string serverName, bool ignoreSniOpenTimeout, long timerExpire, out byte[] instanceName, bool flushCache, bool async, bool parallel)
         {
-            _sessionHandle = SNIProxy.Singleton.CreateConnectionHandle(this, serverName, ignoreSniOpenTimeout, timerExpire, out instanceName, spnBuffer, flushCache, async, parallel);
+            _sessionHandle = SNIProxy.Singleton.CreateConnectionHandle(this, serverName, ignoreSniOpenTimeout, timerExpire, out instanceName, flushCache, async, parallel);
             if (async)
             {
                 // Create call backs and allocate to the session handle
@@ -779,52 +778,6 @@ namespace System.Data.SqlClient
                 _sessionHandle.SetAsyncCallbacks(ReceiveAsyncCallbackDispatcher, SendAsyncCallbackDispatcher);
             }
         }
-
-#else
-        private SNINativeMethodWrapper.ConsumerInfo CreateConsumerInfo(bool async)
-        {
-            SNINativeMethodWrapper.ConsumerInfo myInfo = new SNINativeMethodWrapper.ConsumerInfo();
-
-            Debug.Assert(_outBuff.Length == _inBuff.Length, "Unexpected unequal buffers.");
-
-            myInfo.defaultBufferSize = _outBuff.Length; // Obtain packet size from outBuff size.
-
-            if (async)
-            {
-                myInfo.readDelegate = SNILoadHandle.SingletonInstance.ReadAsyncCallbackDispatcher;
-                myInfo.writeDelegate = SNILoadHandle.SingletonInstance.WriteAsyncCallbackDispatcher;
-                _gcHandle = GCHandle.Alloc(this, GCHandleType.Normal);
-                myInfo.key = (IntPtr)_gcHandle;
-            }
-            return myInfo;
-        }
-
-        internal void CreatePhysicalSNIHandle(string serverName, bool ignoreSniOpenTimeout, long timerExpire, out byte[] instanceName, byte[] spnBuffer, bool flushCache, bool async, bool fParallel)
-        {
-            SNINativeMethodWrapper.ConsumerInfo myInfo = CreateConsumerInfo(async);
-
-            // Translate to SNI timeout values (Int32 milliseconds)
-            long timeout;
-            if (Int64.MaxValue == timerExpire)
-            {
-                timeout = Int32.MaxValue;
-            }
-            else
-            {
-                timeout = ADP.TimerRemainingMilliseconds(timerExpire);
-                if (timeout > Int32.MaxValue)
-                {
-                    timeout = Int32.MaxValue;
-                }
-                else if (0 > timeout)
-                {
-                    timeout = 0;
-                }
-            }
-
-            _sessionHandle = new SNIHandle(myInfo, serverName, spnBuffer, ignoreSniOpenTimeout, checked((int)timeout), out instanceName, flushCache, !async, fParallel);
-        }
-#endif // MANAGED_SNI
 
         internal bool Deactivate()
         {

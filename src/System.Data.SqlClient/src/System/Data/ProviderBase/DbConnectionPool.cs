@@ -116,7 +116,7 @@ namespace System.Data.ProviderBase
         private readonly ConcurrentQueue<PendingGetConnection> _pendingOpens = new ConcurrentQueue<PendingGetConnection>();
         private int _pendingOpensWaiting = 0;
 
-        private readonly WaitCallback _poolCreateRequest;
+        private readonly Action _poolCreateRequest;
 
         private int _waitCount;
         private readonly PoolWaitHandles _waitHandles;
@@ -168,7 +168,7 @@ namespace System.Data.ProviderBase
 
             _objectList = new List<DbConnectionInternal>(MaxPoolSize);
 
-            _poolCreateRequest = new WaitCallback(PoolCreateRequest); // used by CleanupCallback
+            _poolCreateRequest = PoolCreateRequest; // used by CleanupCallback
             _state = State.Running;
 
             //_cleanupTimer & QueuePoolCreateRequest is delayed until DbConnectionPoolGroup calls
@@ -948,7 +948,7 @@ namespace System.Data.ProviderBase
             return (obj);
         }
 
-        private void PoolCreateRequest(object state)
+        private void PoolCreateRequest()
         {
             // called by pooler to ensure pool requests are currently being satisfied -
             // creation mutex has not been obtained
@@ -1076,7 +1076,7 @@ namespace System.Data.ProviderBase
             if (State.Running == _state)
             {
                 // Make sure we're at quota by posting a callback to the threadpool.
-                ThreadPool.QueueUserWorkItem(_poolCreateRequest);
+                Task.Run(_poolCreateRequest);
             }
         }
 

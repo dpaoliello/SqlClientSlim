@@ -1,5 +1,6 @@
 # Built binaries and objects
 bin/
+obj/
 
 # NuGet Packages
 packages/
@@ -8,3 +9,6 @@ packages/
 # Visual Studio temp files
 .vs/
 project.lock.json
+
+# General temp files
+*.log

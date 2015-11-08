@@ -7,6 +7,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "System.Data.SqlClient", "sr
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "System.Data.SqlClient.Tests", "tests\System.Data.SqlClient.Tests.csproj", "{BE51A9B7-B43D-4B00-826B-7E49E648E1F2}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PerfTest", "PerfTest\PerfTest.csproj", "{37515F41-71B2-4AFC-AD6A-B4CE1928C7D5}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -21,6 +23,10 @@ Global
 		{BE51A9B7-B43D-4B00-826B-7E49E648E1F2}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{BE51A9B7-B43D-4B00-826B-7E49E648E1F2}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{BE51A9B7-B43D-4B00-826B-7E49E648E1F2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{37515F41-71B2-4AFC-AD6A-B4CE1928C7D5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{37515F41-71B2-4AFC-AD6A-B4CE1928C7D5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{37515F41-71B2-4AFC-AD6A-B4CE1928C7D5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{37515F41-71B2-4AFC-AD6A-B4CE1928C7D5}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

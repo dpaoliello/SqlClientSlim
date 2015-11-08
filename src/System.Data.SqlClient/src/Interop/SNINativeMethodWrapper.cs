@@ -407,28 +407,8 @@ namespace System.Data
     {
         [DllImport("api-ms-win-core-libraryloader-l1-1-0.dll", CharSet = CharSet.Ansi, BestFitMapping = false, ThrowOnUnmappableChar = true, SetLastError = true)]
         internal static extern IntPtr GetProcAddress(IntPtr HModule, [MarshalAs(UnmanagedType.LPStr), In] string funcName);
-    }
-}
 
-namespace System.Data
-{
-    internal static class Win32NativeMethods
-    {
-        internal static bool IsTokenRestrictedWrapper(IntPtr token)
-        {
-#if MANAGED_SNI
-            throw new PlatformNotSupportedException("The Win32NativeMethods.IsTokenRestrictedWrapper is not supported on non-Windows platform");
-#else
-            bool isRestricted;
-            uint result = SNINativeMethodWrapper.UnmanagedIsTokenRestricted(token, out isRestricted);
-
-            if (result != 0)
-            {
-                Marshal.ThrowExceptionForHR(unchecked((int)result));
-            }
-
-            return isRestricted;
-#endif
-        }
+        [DllImport("api-ms-win-security-base-l1-2-0.dll", BestFitMapping = false, SetLastError = false)]
+        internal static extern bool IsTokenRestricted(IntPtr TokenHandle);
     }
 }

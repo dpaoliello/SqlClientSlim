@@ -12,3 +12,7 @@ project.lock.json
 
 # General temp files
 *.log
+
+# Visual Studio profiling files
+*.vspx
+*.vsp

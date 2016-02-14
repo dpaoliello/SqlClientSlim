@@ -58,9 +58,9 @@ namespace System.Data.ProviderBase
             throw ADP.ClosedConnectionError();
         }
 
-        internal override bool TryOpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource<DbConnectionInternal> retry, DbConnectionOptions userOptions)
+        internal override bool TryOpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory, bool isAsync, DbConnectionOptions userOptions, ref TaskCompletionSource<DbConnectionInternal> completionSource)
         {
-            return base.TryOpenConnectionInternal(outerConnection, connectionFactory, retry, userOptions);
+            return base.TryOpenConnectionInternal(outerConnection, connectionFactory, isAsync, ref completionSource, userOptions);
         }
     }
 
@@ -70,7 +70,7 @@ namespace System.Data.ProviderBase
         {
         }
 
-        internal override bool TryOpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource<DbConnectionInternal> retry, DbConnectionOptions userOptions)
+        internal override bool TryOpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory, bool isAsync, DbConnectionOptions userOptions, ref TaskCompletionSource<DbConnectionInternal> completionSource)
         {
             throw ADP.ConnectionAlreadyOpen(State);
         }
@@ -111,14 +111,14 @@ namespace System.Data.ProviderBase
             connectionFactory.SetInnerConnectionTo(owningObject, DbConnectionClosedPreviouslyOpened.SingletonInstance);
         }
 
-        internal override bool TryReplaceConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource<DbConnectionInternal> retry, DbConnectionOptions userOptions)
+        internal override bool TryReplaceConnection(DbConnection outerConnection, bool isAsync, DbConnectionFactory connectionFactory, DbConnectionOptions userOptions, ref TaskCompletionSource<DbConnectionInternal> completionSource)
         {
-            return TryOpenConnection(outerConnection, connectionFactory, retry, userOptions);
+            return TryOpenConnection(outerConnection, connectionFactory, isAsync: isAsync, userOptions: userOptions, completionSource: ref completionSource);
         }
 
-        internal override bool TryOpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource<DbConnectionInternal> retry, DbConnectionOptions userOptions)
+        internal override bool TryOpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory, bool isAsync, DbConnectionOptions userOptions, ref TaskCompletionSource<DbConnectionInternal> completionSource)
         {
-            if (retry == null || !retry.Task.IsCompleted)
+            if (completionSource == null || !completionSource.Task.IsCompleted)
             {
                 // retry is null if this is a synchronous call
 
@@ -129,8 +129,8 @@ namespace System.Data.ProviderBase
             }
 
             // we are completing an asynchronous open
-            Debug.Assert(retry.Task.Status == TaskStatus.RanToCompletion, "retry task must be completed successfully");
-            DbConnectionInternal openConnection = retry.Task.Result;
+            Debug.Assert(completionSource.Task.Status == TaskStatus.RanToCompletion, "retry task must be completed successfully");
+            DbConnectionInternal openConnection = completionSource.Task.Result;
             if (null == openConnection)
             {
                 connectionFactory.SetInnerConnectionTo(outerConnection, this);
@@ -163,9 +163,9 @@ namespace System.Data.ProviderBase
         {
         }
 
-        internal override bool TryReplaceConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource<DbConnectionInternal> retry, DbConnectionOptions userOptions)
+        internal override bool TryReplaceConnection(DbConnection outerConnection, bool isAsync, DbConnectionFactory connectionFactory, DbConnectionOptions userOptions, ref TaskCompletionSource<DbConnectionInternal> completionSource)
         {
-            return TryOpenConnection(outerConnection, connectionFactory, retry, userOptions);
+            return TryOpenConnection(outerConnection, connectionFactory, isAsync: isAsync, userOptions: userOptions, completionSource: ref completionSource);
         }
     }
 }

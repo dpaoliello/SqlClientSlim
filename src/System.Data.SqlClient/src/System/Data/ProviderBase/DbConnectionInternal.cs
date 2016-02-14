@@ -407,30 +407,22 @@ namespace System.Data.ProviderBase
             }
         }
 
-        internal virtual void OpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory)
-        {
-            if (!TryOpenConnection(outerConnection, connectionFactory, null, null))
-            {
-                throw ADP.InternalError(ADP.InternalErrorCode.SynchronousConnectReturnedPending);
-            }
-        }
-
         /// <devdoc>The default implementation is for the open connection objects, and
         /// it simply throws.  Our private closed-state connection objects
         /// override this and do the correct thing.</devdoc>
         // User code should either override DbConnectionInternal.Activate when it comes out of the pool
         // or override DbConnectionFactory.CreateConnection when the connection is created for non-pooled connections
-        internal virtual bool TryOpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource<DbConnectionInternal> retry, DbConnectionOptions userOptions)
+        internal virtual bool TryOpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory, bool isAsync, DbConnectionOptions userOptions, ref TaskCompletionSource<DbConnectionInternal> completionSource)
         {
             throw ADP.ConnectionAlreadyOpen(State);
         }
 
-        internal virtual bool TryReplaceConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource<DbConnectionInternal> retry, DbConnectionOptions userOptions)
+        internal virtual bool TryReplaceConnection(DbConnection outerConnection, bool isAsync, DbConnectionFactory connectionFactory, DbConnectionOptions userOptions, ref TaskCompletionSource<DbConnectionInternal> completionSource)
         {
             throw ADP.MethodNotImplemented("TryReplaceConnection");
         }
 
-        protected bool TryOpenConnectionInternal(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource<DbConnectionInternal> retry, DbConnectionOptions userOptions)
+        protected bool TryOpenConnectionInternal(DbConnection outerConnection, DbConnectionFactory connectionFactory, bool isAsync, ref TaskCompletionSource<DbConnectionInternal> completionSource, DbConnectionOptions userOptions)
         {
             // ?->Connecting: prevent set_ConnectionString during Open
             if (connectionFactory.SetInnerConnectionFrom(outerConnection, DbConnectionClosedConnecting.SingletonInstance, this))
@@ -439,7 +431,7 @@ namespace System.Data.ProviderBase
                 try
                 {
                     connectionFactory.PermissionDemand(outerConnection);
-                    if (!connectionFactory.TryGetConnection(outerConnection, retry, userOptions, this, out openConnection))
+                    if (!connectionFactory.TryGetConnection(outerConnection, isAsync, userOptions, this, ref completionSource, out openConnection))
                     {
                         return false;
                     }

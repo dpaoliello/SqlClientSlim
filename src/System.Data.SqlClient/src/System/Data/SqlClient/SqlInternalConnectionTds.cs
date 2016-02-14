@@ -1627,9 +1627,9 @@ namespace System.Data.SqlClient
             }
         }
 
-        internal override bool TryReplaceConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource<DbConnectionInternal> retry, DbConnectionOptions userOptions)
+        internal override bool TryReplaceConnection(DbConnection outerConnection, bool isAsync, DbConnectionFactory connectionFactory, DbConnectionOptions userOptions, ref TaskCompletionSource<DbConnectionInternal> completionSource)
         {
-            return base.TryOpenConnectionInternal(outerConnection, connectionFactory, retry, userOptions);
+            return base.TryOpenConnection(outerConnection, connectionFactory, isAsync: isAsync, userOptions: userOptions, completionSource: ref completionSource);
         }
     }
 

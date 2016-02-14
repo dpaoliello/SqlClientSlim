@@ -149,14 +149,12 @@ namespace System.Data.ProviderBase
         {
             if (s_completedTask == null)
             {
-                TaskCompletionSource<DbConnectionInternal> source = new TaskCompletionSource<DbConnectionInternal>();
-                source.SetResult(null);
-                s_completedTask = source.Task;
+                s_completedTask = Task.FromResult<DbConnectionInternal>(null);
             }
             return s_completedTask;
         }
 
-        internal bool TryGetConnection(DbConnection owningConnection, TaskCompletionSource<DbConnectionInternal> retry, DbConnectionOptions userOptions, DbConnectionInternal oldConnection, out DbConnectionInternal connection)
+        internal bool TryGetConnection(DbConnection owningConnection, bool isAsync, DbConnectionOptions userOptions, DbConnectionInternal oldConnection, ref TaskCompletionSource<DbConnectionInternal> completionSource, out DbConnectionInternal connection)
         {
             Debug.Assert(null != owningConnection, "null owningConnection?");
 
@@ -188,7 +186,7 @@ namespace System.Data.ProviderBase
                     // or have a disabled pool entry.
                     poolGroup = GetConnectionPoolGroup(owningConnection); // previous entry have been disabled
 
-                    if (retry != null)
+                    if (completionSource != null)
                     {
                         Task<DbConnectionInternal> newTask;
                         CancellationTokenSource cancellationTokenSource = new CancellationTokenSource();
@@ -241,20 +239,22 @@ namespace System.Data.ProviderBase
                         }
 
                         // once the task is done, propagate the final results to the original caller
-                        newTask.ContinueWith((task) =>
+                        completionSource = completionSource ?? new TaskCompletionSource<DbConnectionInternal>();
+                        newTask.ContinueWith((task, rawCompletionSource) =>
                         {
+                            var innerCompletionSource = (TaskCompletionSource<DbConnectionInternal>)rawCompletionSource;
                             cancellationTokenSource.Dispose();
                             if (task.IsCanceled)
                             {
-                                retry.TrySetException(ADP.ExceptionWithStackTrace(ADP.NonPooledOpenTimeout()));
+                                innerCompletionSource.TrySetException(ADP.ExceptionWithStackTrace(ADP.NonPooledOpenTimeout()));
                             }
                             else if (task.IsFaulted)
                             {
-                                retry.TrySetException(task.Exception.InnerException);
+                                innerCompletionSource.TrySetException(task.Exception.InnerException);
                             }
                             else
                             {
-                                if (!retry.TrySetResult(task.Result))
+                                if (!innerCompletionSource.TrySetResult(task.Result))
                                 {
                                     // The outer TaskCompletionSource was already completed
                                     // Which means that we don't know if someone has messed with the outer connection in the middle of creation
@@ -263,7 +263,7 @@ namespace System.Data.ProviderBase
                                     task.Result.Dispose();
                                 }
                             }
-                        }, TaskScheduler.Default);
+                        }, completionSource, TaskScheduler.Default);
 
                         return false;
                     }
@@ -279,7 +279,7 @@ namespace System.Data.ProviderBase
                     }
                     else
                     {
-                        if (!connectionPool.TryGetConnection(owningConnection, retry, userOptions, out connection))
+                        if (!connectionPool.TryGetConnection(owningConnection, isAsync, userOptions, ref completionSource, out connection))
                         {
                             return false;
                         }

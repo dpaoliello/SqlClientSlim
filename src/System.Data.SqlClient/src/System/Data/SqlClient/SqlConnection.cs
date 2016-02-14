@@ -7,9 +7,6 @@ using System.Data.ProviderBase;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Diagnostics.CodeAnalysis;
-
-
 
 namespace System.Data.SqlClient
 {
@@ -532,7 +529,7 @@ namespace System.Data.SqlClient
                     var parser = innerConnection.Parser;
                     if ((parser != null) && (parser._physicalStateObj != null))
                     {
-                        parser._physicalStateObj.DecrementPendingCallbacks(release: false);
+                        parser._physicalStateObj.DecrementPendingCallbacks();
                     }
                 }
             }
@@ -558,7 +555,8 @@ namespace System.Data.SqlClient
             {
                 statistics = SqlStatistics.StartTimer(Statistics);
 
-                if (!TryOpen(null))
+                TaskCompletionSource<DbConnectionInternal> completionSource = null;
+                if (!TryOpen(isAsync: false, completionSource: ref completionSource))
                 {
                     throw ADP.InternalError(ADP.InternalErrorCode.SynchronousConnectReturnedPending);
                 }
@@ -772,7 +770,6 @@ namespace System.Data.SqlClient
                 completion.Item1.TrySetCanceled();
                 ((IAsyncResult)completion.Item2).AsyncWaitHandle.WaitOne();
             }
-            Debug.Assert(_currentCompletion == null, "After waiting for an async call to complete, there should be no completion source");
         }
 
         public override Task OpenAsync(CancellationToken cancellationToken)
@@ -794,46 +791,38 @@ namespace System.Data.SqlClient
             {
                 statistics = SqlStatistics.StartTimer(Statistics);
 
-                TaskCompletionSource<DbConnectionInternal> completion = new TaskCompletionSource<DbConnectionInternal>();
-                TaskCompletionSource<object> result = new TaskCompletionSource<object>();
-
                 if (cancellationToken.IsCancellationRequested)
                 {
-                    result.SetCanceled();
-                    return result.Task;
+                    return Task.FromCanceled(cancellationToken);
                 }
 
-
                 bool completed;
-
+                TaskCompletionSource<DbConnectionInternal> completion = null;
                 try
                 {
-                    completed = TryOpen(completion);
+                    completed = TryOpen(isAsync: true, completionSource: ref completion);
                 }
                 catch (Exception e)
                 {
-                    result.SetException(e);
-                    return result.Task;
+                    return Task.FromException(e);
                 }
 
-                if (completed)
-                {
-                    result.SetResult(null);
-                }
-                else
+                if (!completed)
                 {
                     CancellationTokenRegistration registration = new CancellationTokenRegistration();
                     if (cancellationToken.CanBeCanceled)
                     {
                         registration = cancellationToken.Register(() => completion.TrySetCanceled());
                     }
-                    OpenAsyncRetry retry = new OpenAsyncRetry(this, completion, result, registration);
-                    _currentCompletion = new Tuple<TaskCompletionSource<DbConnectionInternal>, Task>(completion, result.Task);
-                    completion.Task.ContinueWith(retry.Retry, TaskScheduler.Default);
-                    return result.Task;
+                    OpenAsyncRetry retry = new OpenAsyncRetry(this, registration);
+                    var openTask = completion.Task.ContinueWith(retry.Retry, TaskScheduler.Default).Unwrap();
+                    _currentCompletion = Tuple.Create(completion, openTask);
+                    return openTask;
                 }
-
-                return result.Task;
+                else
+                {
+                    return Task.CompletedTask;
+                }
             }
             finally
             {
@@ -844,94 +833,59 @@ namespace System.Data.SqlClient
         private class OpenAsyncRetry
         {
             private SqlConnection _parent;
-            private TaskCompletionSource<DbConnectionInternal> _retry;
-            private TaskCompletionSource<object> _result;
             private CancellationTokenRegistration _registration;
 
-            public OpenAsyncRetry(SqlConnection parent, TaskCompletionSource<DbConnectionInternal> retry, TaskCompletionSource<object> result, CancellationTokenRegistration registration)
+            public OpenAsyncRetry(SqlConnection parent, CancellationTokenRegistration registration)
             {
                 _parent = parent;
-                _retry = retry;
-                _result = result;
                 _registration = registration;
             }
 
-            internal void Retry(Task<DbConnectionInternal> retryTask)
+            internal Task Retry(Task<DbConnectionInternal> retryTask)
             {
                 _registration.Dispose();
-                try
-                {
-                    SqlStatistics statistics = null;
-                    try
-                    {
-                        statistics = SqlStatistics.StartTimer(_parent.Statistics);
 
-                        if (retryTask.IsFaulted)
-                        {
-                            Exception e = retryTask.Exception.InnerException;
-                            _parent.CloseInnerConnection();
-                            _parent._currentCompletion = null;
-                            _result.SetException(retryTask.Exception.InnerException);
-                        }
-                        else if (retryTask.IsCanceled)
-                        {
-                            _parent.CloseInnerConnection();
-                            _parent._currentCompletion = null;
-                            _result.SetCanceled();
-                        }
-                        else
-                        {
-                            bool result;
-                            // protect continuation from races with close and cancel
-                            lock (_parent.InnerConnection)
-                            {
-                                result = _parent.TryOpen(_retry);
-                            }
-                            if (result)
-                            {
-                                _parent._currentCompletion = null;
-                                _result.SetResult(null);
-                            }
-                            else
-                            {
-                                _parent.CloseInnerConnection();
-                                _parent._currentCompletion = null;
-                                _result.SetException(ADP.ExceptionWithStackTrace(ADP.InternalError(ADP.InternalErrorCode.CompletedConnectReturnedPending)));
-                            }
-                        }
-                    }
-                    finally
-                    {
-                        SqlStatistics.StopTimer(statistics);
-                    }
-                }
-                catch (Exception e)
+                if (retryTask.IsFaulted || retryTask.IsCanceled)
                 {
                     _parent.CloseInnerConnection();
-                    _parent._currentCompletion = null;
-                    _result.SetException(e);
                 }
+                else
+                {
+                    s_connectionFactory.SetInnerConnectionEvent(_parent, retryTask.Result);
+                    _parent.FinishOpen();
+                }
+
+                return retryTask;
             }
         }
 
-        private bool TryOpen(TaskCompletionSource<DbConnectionInternal> retry)
+        private bool TryOpen(bool isAsync, ref TaskCompletionSource<DbConnectionInternal> completionSource)
         {
             if (ForceNewConnection)
             {
-                if (!InnerConnection.TryReplaceConnection(this, ConnectionFactory, retry, UserConnectionOptions))
+                if (!InnerConnection.TryReplaceConnection(this, isAsync, ConnectionFactory, UserConnectionOptions, ref completionSource))
                 {
+                    Debug.Assert(completionSource != null, "If didn't completed sync, then should have a completionSource");
                     return false;
                 }
             }
             else
             {
-                if (!InnerConnection.TryOpenConnection(this, ConnectionFactory, retry, UserConnectionOptions))
+                if (!InnerConnection.TryOpenConnection(this, ConnectionFactory, isAsync, UserConnectionOptions, ref completionSource))
                 {
+                    Debug.Assert(completionSource != null, "If didn't completed sync, then should have a completionSource");
                     return false;
                 }
             }
             // does not require GC.KeepAlive(this) because of OnStateChange
 
+            Debug.Assert(completionSource == null, "If completed sync, then shouldn't have a completionSource");
+            FinishOpen();
+            return true;
+        }
+
+        private void FinishOpen()
+        {
             var tdsInnerConnection = (InnerConnection as SqlInternalConnectionTds);
             Debug.Assert(tdsInnerConnection.Parser != null, "Where's the parser?");
 
@@ -951,8 +905,6 @@ namespace System.Data.SqlClient
                 tdsInnerConnection.Parser.Statistics = null;
                 _statistics = null; // in case of previous Open/Close/reset_CollectStats sequence
             }
-
-            return true;
         }
 
 

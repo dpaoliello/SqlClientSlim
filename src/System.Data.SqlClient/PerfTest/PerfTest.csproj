@@ -14,16 +14,15 @@
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <TargetFrameworkProfile />
     <OutputPath>..\..\..\bin\Windows_NT.$(Platform).$(Configuration)\PerfTest</OutputPath>
+    <PlatformTarget>AnyCPU</PlatformTarget>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
-    <PlatformTarget>AnyCPU</PlatformTarget>
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
     <DefineConstants>DEBUG;TRACE</DefineConstants>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
-    <PlatformTarget>AnyCPU</PlatformTarget>
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
     <DefineConstants>TRACE</DefineConstants>
@@ -98,11 +97,18 @@
     </None>
   </ItemGroup>
   <ItemGroup>
+    <!-- Unfortunately, using a ProjectReference causes a dll with the wrong Configuration to be picked up,
+         so add a ProjectReference to ensure that something is built and a Reference with HintPath for the dll -->
     <ProjectReference Include="..\src\System.Data.SqlClient.csproj">
       <Project>{d4550556-4745-457f-ba8f-3ebf3836d6b4}</Project>
       <Name>System.Data.SqlClient</Name>
-      <Aliases>SqlClientSlim</Aliases>
+      <ReferenceOutputAssembly>False</ReferenceOutputAssembly>
     </ProjectReference>
+    <Reference Include="System.Data.SqlClient">
+      <Aliases>SqlClientSlim</Aliases>
+      <Private>True</Private>
+      <HintPath>..\..\..\bin\Windows_NT.$(Platform).$(Configuration)\System.Data.SqlClient\System.Data.SqlClient.dll</HintPath>
+    </Reference>
   </ItemGroup>
   <ItemGroup>
     <Content Include="Tests.tt">

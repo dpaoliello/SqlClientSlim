@@ -101,6 +101,10 @@ namespace StressTest
             {
                 // The request failed to run because the batch is aborted, this can be caused by abort signal sent from client, or another request is running in the same session, which makes the session busy.
             }
+            catch (InvalidOperationException ex) when (cancellationToken.IsCancellationRequested && (ex.Message == "Operation cancelled by user."))
+            {
+                // Operation cancelled by user.
+            }
 
             // Fallthrough: known exception happened
             return new ExecutionResult<T>();

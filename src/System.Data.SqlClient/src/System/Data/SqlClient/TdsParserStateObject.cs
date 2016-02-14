@@ -84,18 +84,10 @@ namespace System.Data.SqlClient
         private SNIPacket _sniPacket = null;                // Will have to re-vamp this for MARS
         internal SNIPacket _sniAsyncAttnPacket = null;                // Packet to use to send Attn
         private WritePacketCache _writePacketCache = new WritePacketCache(); // Store write packets that are ready to be re-used
-#if MANAGED_SNI
         private Dictionary<SNIPacket, SNIPacket> _pendingWritePackets = new Dictionary<SNIPacket, SNIPacket>(); // Stores write packets that have been sent to SNI, but have not yet finished writing (i.e. we are waiting for SNI's callback)
-#else
-        private Dictionary<IntPtr, SNIPacket> _pendingWritePackets = new Dictionary<IntPtr, SNIPacket>(); // Stores write packets that have been sent to SNI, but have not yet finished writing (i.e. we are waiting for SNI's callback)
-#endif // MANAGED_SNI
         private object _writePacketLockObject = new object();        // Used to synchronize access to _writePacketCache and _pendingWritePackets
 
         // Async variables
-#if MANAGED_SNI
-#else
-        private GCHandle _gcHandle;                                    // keeps this object alive until we're closed.
-#endif // MANAGED_SNI
         private int _pendingCallbacks;                            // we increment this before each async read/write call and decrement it in the callback.  We use this to determine when to release the GcHandle...
 
         // Timeout variables
@@ -261,7 +253,7 @@ namespace System.Data.SqlClient
             _lastSuccessfulIOTimer = new LastIOTimer();
         }
 
-        internal TdsParserStateObject(TdsParser parser, SNIHandle physicalConnection, bool async)
+        internal TdsParserStateObject(TdsParser parser, SNIHandle physicalConnection)
         {
             // Construct a MARS session
             Debug.Assert(null != parser, "no parser?");
@@ -277,16 +269,12 @@ namespace System.Data.SqlClient
             // Determine packet size based on physical connection buffer lengths.
             SetPacketSize(_parser._physicalStateObj._outBuff.Length);
 
-#if MANAGED_SNI
-            _sessionHandle = SNIProxy.Singleton.CreateMarsHandle(this, physicalConnection, _outBuff.Length, async);
-#else
-            SNINativeMethodWrapper.ConsumerInfo myInfo = CreateConsumerInfo(async);
-            _sessionHandle = new SNIHandle(myInfo, physicalConnection);
-#endif // MANAGED_SNI
+            SNIError sniError;
+            _sessionHandle = SNIProxy.Singleton.CreateMarsHandle(this, physicalConnection, _outBuff.Length, out sniError);
 
-            if (_sessionHandle.Status != TdsEnums.SNI_SUCCESS)
+            if (sniError != null)
             {
-                AddError(parser.ProcessSNIError(this));
+                AddError(parser.ProcessSNIError(this, sniError));
                 ThrowExceptionAndWarning();
             }
 
@@ -405,21 +393,6 @@ namespace System.Data.SqlClient
 #if DEBUG
                 _debugOnlyCopyOfSniContext = value;
 #endif
-            }
-        }
-
-        internal UInt32 Status
-        {
-            get
-            {
-                if (_sessionHandle != null)
-                {
-                    return _sessionHandle.Status;
-                }
-                else
-                {
-                    return TdsEnums.SNI_UNINITIALIZED;
-                }
             }
         }
 
@@ -695,7 +668,7 @@ namespace System.Data.SqlClient
             }
         }
 
-        public void CheckSetResetConnectionState(UInt32 error, CallbackType callbackType)
+        public void CheckSetResetConnectionState(SNIError error, CallbackType callbackType)
         {
             // Should only be called for MARS - that is the only time we need to take
             // the ResetConnection lock!
@@ -711,7 +684,7 @@ namespace System.Data.SqlClient
 
             if (_fResetEventOwned)
             {
-                if (callbackType == CallbackType.Read && TdsEnums.SNI_SUCCESS == error)
+                if ((callbackType == CallbackType.Read) && (error == null))
                 {
                     // RESET SUCCEEDED!
                     // If we are on read callback and no error occurred (and we own reset event) -
@@ -723,7 +696,7 @@ namespace System.Data.SqlClient
                     Debug.Assert(!_fResetEventOwned, "Invalid AutoResetEvent state!");
                 }
 
-                if (TdsEnums.SNI_SUCCESS != error)
+                if (error != null)
                 {
                     // RESET FAILED!
 
@@ -767,16 +740,14 @@ namespace System.Data.SqlClient
             }
         }
 
-        internal void CreateConnectionHandle(string serverName, bool ignoreSniOpenTimeout, long timerExpire, out byte[] instanceName, bool flushCache, bool async, bool parallel)
+        internal void CreateConnectionHandle(string serverName, bool ignoreSniOpenTimeout, long timerExpire, out byte[] instanceName, bool flushCache, bool parallel, out SNIError sniError)
         {
-            _sessionHandle = SNIProxy.Singleton.CreateConnectionHandle(this, serverName, ignoreSniOpenTimeout, timerExpire, out instanceName, flushCache, async, parallel);
-            if (async)
-            {
-                // Create call backs and allocate to the session handle
-                SNIAsyncCallback ReceiveAsyncCallbackDispatcher = new SNIAsyncCallback(ReadAsyncCallback);
-                SNIAsyncCallback SendAsyncCallbackDispatcher = new SNIAsyncCallback(WriteAsyncCallback);
-                _sessionHandle.SetAsyncCallbacks(ReceiveAsyncCallbackDispatcher, SendAsyncCallbackDispatcher);
-            }
+            _sessionHandle = SNIProxy.Singleton.CreateConnectionHandle(this, serverName, ignoreSniOpenTimeout, timerExpire, out instanceName, flushCache, parallel, out sniError);
+
+            // Create call backs and allocate to the session handle
+            SNIAsyncCallback ReceiveAsyncCallbackDispatcher = new SNIAsyncCallback(ReadAsyncCallback);
+            SNIAsyncCallback SendAsyncCallbackDispatcher = new SNIAsyncCallback(WriteAsyncCallback);
+            _sessionHandle.SetAsyncCallbacks(ReceiveAsyncCallbackDispatcher, SendAsyncCallbackDispatcher);
         }
 
         internal bool Deactivate()
@@ -841,23 +812,9 @@ namespace System.Data.SqlClient
             _hasOpenResult = false;
         }
 
-        internal int DecrementPendingCallbacks(bool release)
+        internal int DecrementPendingCallbacks()
         {
             int remaining = Interlocked.Decrement(ref _pendingCallbacks);
-
-#if MANAGED_SNI
-            if ((0 == remaining || release) && SNIProxy.Singleton.IsGcHandleAllocated())
-#else	
-            if ((0 == remaining || release) && _gcHandle.IsAllocated)
-#endif // MANAGED_SNI
-
-            {
-#if MANAGED_SNI
-                SNIProxy.Singleton.FreeGcHandle();				
-#else
-                _gcHandle.Free();
-#endif // MANAGED_SNI
-            }
 
             // NOTE: TdsParserSessionPool may call DecrementPendingCallbacks on a TdsParserStateObject which is already disposed
             // This is not dangerous (since the stateObj is no longer in use), but we need to add a workaround in the assert for it
@@ -867,15 +824,9 @@ namespace System.Data.SqlClient
 
         internal void Dispose()
         {
-#if MANAGED_SNI		
             SNIPacket packetHandle = _sniPacket;
             SNIHandle sessionHandle = _sessionHandle;
             SNIPacket asyncAttnPacket = _sniAsyncAttnPacket;
-#else
-            SafeHandle packetHandle = _sniPacket;
-            SafeHandle sessionHandle = _sessionHandle;
-            SafeHandle asyncAttnPacket = _sniAsyncAttnPacket;
-#endif // MANAGED_SNI
 
             _sniPacket = null;
             _sessionHandle = null;
@@ -906,31 +857,10 @@ namespace System.Data.SqlClient
                 try { }
                 finally
                 {
-                    if (packetHandle != null)
-                    {
-                        packetHandle.Dispose();
-                    }
-                    if (asyncAttnPacket != null)
-                    {
-                        asyncAttnPacket.Dispose();
-                    }
                     if (sessionHandle != null)
                     {
                         sessionHandle.Dispose();
-                        DecrementPendingCallbacks(true); // Will dispose of GC handle.
-                    }
-                }
-            }
-
-            if (_writePacketCache != null)
-            {
-                lock (_writePacketLockObject)
-                {
-                    try { }
-                    finally
-                    {
-                        _writePacketCache.Dispose();
-                        // Do not set _writePacketCache to null, just in case a WriteAsyncCallback completes after this point
+                        DecrementPendingCallbacks();
                     }
                 }
             }
@@ -2125,7 +2055,7 @@ namespace System.Data.SqlClient
             IntPtr readPacket = IntPtr.Zero;
 #endif // MANAGED_SNI
 
-            UInt32 error;
+            SNIError error;
 
             bool shouldDecrement = false;
             try
@@ -2139,11 +2069,7 @@ namespace System.Data.SqlClient
                     throw ADP.ClosedConnectionError();
                 }
 
-#if MANAGED_SNI
                 error = SNIProxy.Singleton.ReadSyncOverAsync(handle, ref readPacket, GetTimeoutRemaining());
-#else
-                error = SNINativeMethodWrapper.SNIReadSyncOverAsync(handle, ref readPacket, GetTimeoutRemaining());
-#endif // MANAGED_SNI
 
                 Interlocked.Decrement(ref _readingCount);
                 shouldDecrement = false;
@@ -2153,15 +2079,11 @@ namespace System.Data.SqlClient
                     CheckSetResetConnectionState(error, CallbackType.Read);
                 }
 
-                if (TdsEnums.SNI_SUCCESS == error)
+                if (error == null)
                 { // Success - process results!
-#if MANAGED_SNI				
                     Debug.Assert(readPacket != null, "ReadNetworkPacket cannot be null in syncronous operation!");
-#else					
-                    Debug.Assert(IntPtr.Zero != readPacket, "ReadNetworkPacket cannot be null in syncronous operation!");
-#endif // MANAGED_SNI
 
-                    ProcessSniPacket(readPacket, 0);
+                    ProcessSniPacket(readPacket, null);
 #if DEBUG
                     if (_forcePendingReadsToWaitForUser)
                     {
@@ -2174,11 +2096,7 @@ namespace System.Data.SqlClient
                 }
                 else
                 { // Failure!
-#if MANAGED_SNI
                     Debug.Assert(readPacket == null || readPacket.IsInvalid, "unexpected readPacket without corresponding SNIPacketRelease");
-#else
-                    Debug.Assert(IntPtr.Zero == readPacket, "unexpected readPacket without corresponding SNIPacketRelease");
-#endif // MANAGED_SNI
                     ReadSniError(this, error);
                 }
             }
@@ -2188,19 +2106,6 @@ namespace System.Data.SqlClient
                 {
                     Interlocked.Decrement(ref _readingCount);
                 }
-
-#if MANAGED_SNI
-                if (readPacket != null)
-                {
-                    readPacket.Dispose();
-                }
-#else
-                if (readPacket != IntPtr.Zero)
-                {
-                    // Be sure to release packet, otherwise it will be leaked by native.
-                    SNINativeMethodWrapper.SNIPacketRelease(readPacket);
-                }
-#endif // MANAGED_SNI
 
                 AssertValidState();
             }
@@ -2334,7 +2239,7 @@ namespace System.Data.SqlClient
                                     }
                                     finally
                                     {
-                                        DecrementPendingCallbacks(release: false);
+                                        DecrementPendingCallbacks();
                                     }
                                 }
                             });
@@ -2366,13 +2271,7 @@ namespace System.Data.SqlClient
             }
 #endif
 
-#if MANAGED_SNI
             SNIPacket readPacket = null;
-#else
-            IntPtr readPacket = IntPtr.Zero;
-#endif // MANAGED_SNI
-
-            UInt32 error = 0;
 
             try
             {
@@ -2393,6 +2292,8 @@ namespace System.Data.SqlClient
                 }
 
                 SNIHandle handle = null;
+                SNIError sniError = null;
+                bool completedSync = false;
 
                 try { }
                 finally
@@ -2404,15 +2305,11 @@ namespace System.Data.SqlClient
                     {
                         IncrementPendingCallbacks();
 
-#if MANAGED_SNI
-                        error = SNIProxy.Singleton.ReadAsync(handle, ref readPacket);
-#else
-                        error = SNINativeMethodWrapper.SNIReadAsync(handle, ref readPacket);
-#endif // MANAGED_SNI
+                        completedSync = SNIProxy.Singleton.ReadAsync(handle, ref readPacket, out sniError);
 
-                        if (!(TdsEnums.SNI_SUCCESS == error || TdsEnums.SNI_SUCCESS_IO_PENDING == error))
+                        if (completedSync && (sniError != null))
                         {
-                            DecrementPendingCallbacks(false); // Failure - we won't receive callback!
+                            DecrementPendingCallbacks(); // Failure - we won't receive callback!
                         }
                     }
 
@@ -2424,19 +2321,7 @@ namespace System.Data.SqlClient
                     throw ADP.ClosedConnectionError();
                 }
 
-                if (TdsEnums.SNI_SUCCESS == error)
-                { // Success - process results!
-#if MANAGED_SNI
-                    Debug.Assert(!readPacket.IsInvalid, "ReadNetworkPacket should not have been null on this async operation!");
-                    // Evaluate this condition for MANAGED_SNI. This may not be needed because the network call is happening Async and only the callback can receive a success.
-                    ReadAsyncCallback(readPacket, 0);
-#else
-                    Debug.Assert(IntPtr.Zero != readPacket, "ReadNetworkPacket should not have been null on this async operation!");
-                    ReadAsyncCallback(IntPtr.Zero, readPacket, 0);
-#endif // MANAGED_SNI
-
-                }
-                else if (TdsEnums.SNI_SUCCESS_IO_PENDING != error)
+                if (sniError != null)
                 { // FAILURE!
 #if MANAGED_SNI
                     Debug.Assert(readPacket == null || readPacket.IsInvalid, "unexpected readPacket without corresponding SNIPacketRelease");
@@ -2444,7 +2329,7 @@ namespace System.Data.SqlClient
                     Debug.Assert(IntPtr.Zero == readPacket, "unexpected readPacket without corresponding SNIPacketRelease");
 #endif // MANAGED_SNI
 
-                    ReadSniError(this, error);
+                    ReadSniError(this, sniError);
 #if DEBUG
                     if ((_forcePendingReadsToWaitForUser) && (_realNetworkPacketTaskSource != null))
                     {
@@ -2457,6 +2342,12 @@ namespace System.Data.SqlClient
                     }
                     // Disable timeout timer on error
                     ChangeNetworkPacketTimeout(Timeout.Infinite, Timeout.Infinite);
+                }
+                else if (completedSync)
+                { // Success - process results!
+                    Debug.Assert(!readPacket.IsInvalid, "ReadNetworkPacket should not have been null on this async operation!");
+                    // Evaluate this condition for MANAGED_SNI. This may not be needed because the network call is happening Async and only the callback can receive a success.
+                    ReadAsyncCallback(readPacket, null);
                 }
                 else if (msecsRemaining == 0)
                 { // Got IO Pending, but we have no time left to wait
@@ -2509,52 +2400,23 @@ namespace System.Data.SqlClient
                 }
                 else
                 {
-                    UInt32 error;
-#if MANAGED_SNI					
-                    SNIPacket readPacket = null;
-#else					
-                    IntPtr readPacket = IntPtr.Zero;
-#endif // MANAGED_SNI
+                    SniContext = SniContext.Snix_Connect;
+                    SNIError error = SNIProxy.Singleton.CheckConnection(Handle);
 
-                    try
+                    if (error != null)
                     {
-                        SniContext = SniContext.Snix_Connect;
-#if MANAGED_SNI						
-                        error = SNIProxy.Singleton.CheckConnection(Handle);
-#else						
-                        error = SNINativeMethodWrapper.SNICheckConnection(Handle);
-#endif // MANAGED_SNI
-
-                        if ((error != TdsEnums.SNI_SUCCESS) && (error != TdsEnums.SNI_WAIT_TIMEOUT))
+                        // Connection is dead
+                        isAlive = false;
+                        if (throwOnException)
                         {
-                            // Connection is dead
-                            isAlive = false;
-                            if (throwOnException)
-                            {
-                                // Get the error from SNI so that we can throw the correct exception
-                                AddError(_parser.ProcessSNIError(this));
-                                ThrowExceptionAndWarning();
-                            }
-                        }
-                        else
-                        {
-                            _lastSuccessfulIOTimer._value = DateTime.UtcNow.Ticks;
+                            // Get the error from SNI so that we can throw the correct exception
+                            AddError(_parser.ProcessSNIError(this, error));
+                            ThrowExceptionAndWarning();
                         }
                     }
-                    finally
+                    else
                     {
-#if MANAGED_SNI			
-                        if (readPacket != null)
-                        {
-                            readPacket.Dispose();
-                        }
-#else
-                        if (readPacket != IntPtr.Zero)
-                        {
-                            // Be sure to release packet, otherwise it will be leaked by native.
-                            SNINativeMethodWrapper.SNIPacketRelease(readPacket);
-                        }
-#endif // MANAGED_SNI
+                        _lastSuccessfulIOTimer._value = DateTime.UtcNow.Ticks;
                     }
                 }
             }
@@ -2580,7 +2442,7 @@ namespace System.Data.SqlClient
                 return true;
             }
 
-            UInt32 error = TdsEnums.SNI_SUCCESS;
+            SNIError error = null;
             SniContext = SniContext.Snix_Connect;
             try
             {
@@ -2588,24 +2450,20 @@ namespace System.Data.SqlClient
                 SNIHandle handle = Handle;
                 if (handle != null)
                 {
-#if MANAGED_SNI				
                     error = SNIProxy.Singleton.CheckConnection(handle);
-#else					
-                    error = SNINativeMethodWrapper.SNICheckConnection(handle);
-#endif // MANAGED_SNI
                 }
             }
             finally
             {
                 Interlocked.Decrement(ref _readingCount);
             }
-            return (error == TdsEnums.SNI_SUCCESS) || (error == TdsEnums.SNI_WAIT_TIMEOUT);
+            return (error == null);
         }
 
         // This method should only be called by ReadSni!  If not - it may have problems with timeouts!
-        private void ReadSniError(TdsParserStateObject stateObj, UInt32 error)
+        private void ReadSniError(TdsParserStateObject stateObj, SNIError sniError)
         {
-            if (TdsEnums.SNI_WAIT_TIMEOUT == error)
+            if (TdsEnums.SNI_WAIT_TIMEOUT == sniError.nativeError)
             {
                 Debug.Assert(_syncOverAsync, "Should never reach here with async on!");
                 bool fail = false;
@@ -2644,32 +2502,24 @@ namespace System.Data.SqlClient
                                     throw ADP.ClosedConnectionError();
                                 }
 
-#if MANAGED_SNI
                                 if (_parser.MARSOn)
                                 {
                                     IncrementPendingCallbacks();
                                 }
-                                error = SNIProxy.Singleton.ReadSyncOverAsync(handle, ref syncReadPacket, stateObj.GetTimeoutRemaining());
-#else								
-                                error = SNINativeMethodWrapper.SNIReadSyncOverAsync(handle, ref syncReadPacket, stateObj.GetTimeoutRemaining());
-#endif // MANAGED_SNI
+                                sniError = SNIProxy.Singleton.ReadSyncOverAsync(handle, ref syncReadPacket, stateObj.GetTimeoutRemaining());
 
                                 Interlocked.Decrement(ref _readingCount);
                                 shouldDecrement = false;
 
-                                if (TdsEnums.SNI_SUCCESS == error)
+                                if (sniError == null)
                                 {
                                     // We will end up letting the run method deal with the expected done:done_attn token stream.
-                                    stateObj.ProcessSniPacket(syncReadPacket, 0);
+                                    stateObj.ProcessSniPacket(syncReadPacket, null);
                                     return;
                                 }
                                 else
                                 {
-#if MANAGED_SNI
                                     Debug.Assert(syncReadPacket == null || syncReadPacket.IsInvalid, "unexpected syncReadPacket without corresponding SNIPacketRelease");
-#else									
-                                    Debug.Assert(IntPtr.Zero == syncReadPacket, "unexpected syncReadPacket without corresponding SNIPacketRelease");
-#endif // MANAGED_SNI
                                     fail = true; // Subsequent read failed, time to give up.
                                 }
                             }
@@ -2679,19 +2529,6 @@ namespace System.Data.SqlClient
                                 {
                                     Interlocked.Decrement(ref _readingCount);
                                 }
-
-#if MANAGED_SNI
-                                if (syncReadPacket != null)
-                                {
-                                    syncReadPacket.Dispose();
-                                }
-#else
-                                if (syncReadPacket != IntPtr.Zero)
-                                {
-                                    // Be sure to release packet, otherwise it will be leaked by native.
-                                    SNINativeMethodWrapper.SNIPacketRelease(syncReadPacket);
-                                }
-#endif // MANAGED_SNI
                             }
                         }
                         else
@@ -2721,20 +2558,16 @@ namespace System.Data.SqlClient
             else
             {
                 // Caution: ProcessSNIError  always  returns a fatal error!
-                AddError(_parser.ProcessSNIError(stateObj));
+                AddError(_parser.ProcessSNIError(stateObj, sniError));
             }
             ThrowExceptionAndWarning();
 
             AssertValidState();
         }
 
-#if MANAGED_SNI		
-        public void ProcessSniPacket(SNIPacket packet, UInt32 error)
-#else		
-        public void ProcessSniPacket(IntPtr packet, UInt32 error)
-#endif // MANAGED_SNI
+        public void ProcessSniPacket(SNIPacket packet, SNIError error)
         {
-            if (error != 0)
+            if (error != null)
             {
                 if ((_parser.State == TdsParserState.Closed) || (_parser.State == TdsParserState.Broken))
                 {
@@ -2743,17 +2576,13 @@ namespace System.Data.SqlClient
                     return;
                 }
 
-                AddError(_parser.ProcessSNIError(this));
+                AddError(_parser.ProcessSNIError(this, error));
                 AssertValidState();
             }
             else
             {
                 UInt32 dataSize = 0;
-#if MANAGED_SNI				
                 UInt32 getDataError = SNIProxy.Singleton.PacketGetData(packet, _inBuff, ref dataSize);
-#else				
-                UInt32 getDataError = SNINativeMethodWrapper.SNIPacketGetData(packet, _inBuff, ref dataSize);
-#endif // MANAGED_SNI
 
                 if (getDataError == TdsEnums.SNI_SUCCESS)
                 {
@@ -2808,23 +2637,8 @@ namespace System.Data.SqlClient
             }
         }
 
-#if MANAGED_SNI
-        public void ReadAsyncCallback(SNIPacket packet, UInt32 error)
+        public void ReadAsyncCallback(SNIPacket packet, SNIError error)
         { 
-#else		
-        public void ReadAsyncCallback(IntPtr key, IntPtr packet, UInt32 error)
-        {
-            // Key never used.
-            // Note - it's possible that when native calls managed that an asynchronous exception
-            // could occur in the native->managed transition, which would
-            // have two impacts:
-            // 1) user event not called
-            // 2) DecrementPendingCallbacks not called, which would mean this object would be leaked due
-            //    to the outstanding GCRoot until AppDomain.Unload.
-            // We live with the above for the time being due to the constraints of the current
-            // reliability infrastructure provided by the CLR.
-#endif
-
             TaskCompletionSource<object> source = _networkPacketTaskSource;
 #if DEBUG
             if ((_forcePendingReadsToWaitForUser) && (_realNetworkPacketTaskSource != null))
@@ -2865,10 +2679,10 @@ namespace System.Data.SqlClient
             finally
             {
                 // pendingCallbacks may be 2 after decrementing, this indicates that a fatal timeout is occuring, and therefore we shouldn't complete the task
-                int pendingCallbacks = DecrementPendingCallbacks(false); // may dispose of GC handle.
+                int pendingCallbacks = DecrementPendingCallbacks();
                 if ((processFinallyBlock) && (source != null) && (pendingCallbacks < 2))
                 {
-                    if (error == 0)
+                    if (error == null)
                     {
                         if (_executionContext != null)
                         {
@@ -2940,20 +2754,16 @@ namespace System.Data.SqlClient
 
 #pragma warning disable 0420 // a reference to a volatile field will not be treated as volatile
 
-#if MANAGED_SNI
-        public void WriteAsyncCallback(SNIPacket packet, UInt32 sniError)
-#else
-        public void WriteAsyncCallback(IntPtr key, IntPtr packet, UInt32 sniError)
-#endif // MANAGED_SNI
+        public void WriteAsyncCallback(SNIPacket packet, SNIError sniError)
         { // Key never used.
             RemovePacketFromPendingList(packet);
             try
             {
-                if (sniError != TdsEnums.SNI_SUCCESS)
+                if (sniError != null)
                 {
                     try
                     {
-                        AddError(_parser.ProcessSNIError(this));
+                        AddError(_parser.ProcessSNIError(this, sniError));
                         ThrowExceptionAndWarning(asyncClose: true);
                     }
                     catch (Exception e)
@@ -3286,7 +3096,7 @@ namespace System.Data.SqlClient
 
 #pragma warning disable 0420 // a reference to a volatile field will not be treated as volatile
 
-        private Task SNIWritePacket(SNIHandle handle, SNIPacket packet, out UInt32 sniError, bool canAccumulate, bool callerHasConnectionLock)
+        private Task SNIWritePacket(SNIHandle handle, SNIPacket packet, bool canAccumulate, bool callerHasConnectionLock)
         {
             // Check for a stored exception
             var delayedException = Interlocked.Exchange(ref _delayedWriteAsyncCallbackException, null);
@@ -3297,10 +3107,6 @@ namespace System.Data.SqlClient
 
             Task task = null;
             _writeCompletionSource = null;
-#if MANAGED_SNI
-#else
-            IntPtr packetPointer = IntPtr.Zero;
-#endif // MANAGED_SNI
             bool sync = !_parser._asyncWrite;
             if (sync && _asyncWriteCount > 0)
             { // for example, SendAttention while there are writes pending
@@ -3321,25 +3127,20 @@ namespace System.Data.SqlClient
             if (!sync)
             {
                 // Add packet to the pending list (since the callback can happen any time after we call SNIWritePacket)
-#if MANAGED_SNI
                 AddPacketToPendingList(packet);
-#else
-                packetPointer = AddPacketToPendingList(packet);
-#endif // MANAGED_SNI
             }
+
             // Async operation completion may be delayed (success pending).
+            bool completedSync = false;
+            SNIError sniError = null;
             try
             {
             }
             finally
             {
-#if MANAGED_SNI
-                sniError = SNIProxy.Singleton.WritePacket(handle, packet, sync);
-#else
-                sniError = SNINativeMethodWrapper.SNIWritePacket(handle, packet, sync);
-#endif // MANAGED_SNI
+                completedSync = SNIProxy.Singleton.WritePacket(handle, packet, sync, out sniError);
             }
-            if (sniError == TdsEnums.SNI_SUCCESS_IO_PENDING)
+            if (!completedSync)
             {
                 Debug.Assert(!sync, "Completion should be handled in SniManagedWwrapper");
                 Interlocked.Increment(ref _asyncWriteCount);
@@ -3372,7 +3173,7 @@ namespace System.Data.SqlClient
             {
                 // Executed synchronously - callback will not be called 
                 TaskCompletionSource<object> completion = new TaskCompletionSource<object>();
-                uint error = sniError;
+                SNIError error = sniError;
                 new Timer(obj =>
                 {
                     try
@@ -3382,9 +3183,9 @@ namespace System.Data.SqlClient
                             CheckSetResetConnectionState(error, CallbackType.Write);
                         }
 
-                        if (error != TdsEnums.SNI_SUCCESS)
+                        if (error != null)
                         {
-                            AddError(_parser.ProcessSNIError(this));
+                            AddError(_parser.ProcessSNIError(this, error));
                             ThrowExceptionAndWarning();
                         }
                         AssertValidState();
@@ -3405,7 +3206,7 @@ namespace System.Data.SqlClient
                     CheckSetResetConnectionState(sniError, CallbackType.Write);
                 }
 
-                if (sniError == TdsEnums.SNI_SUCCESS)
+                if (sniError == null)
                 {
                     _lastSuccessfulIOTimer._value = DateTime.UtcNow.Ticks;
 
@@ -3423,7 +3224,7 @@ namespace System.Data.SqlClient
                 }
                 else
                 {
-                    AddError(_parser.ProcessSNIError(this));
+                    AddError(_parser.ProcessSNIError(this, sniError));
                     ThrowExceptionAndWarning(callerHasConnectionLock);
                 }
                 AssertValidState();
@@ -3481,9 +3282,8 @@ namespace System.Data.SqlClient
                                 return;
                             }
 
-                            UInt32 sniError;
                             _parser._asyncWrite = false; // stop async write 
-                            SNIWritePacket(Handle, attnPacket, out sniError, canAccumulate: false, callerHasConnectionLock: false);
+                            SNIWritePacket(Handle, attnPacket, canAccumulate: false, callerHasConnectionLock: false);
                         }
                         finally
                         {
@@ -3520,9 +3320,8 @@ namespace System.Data.SqlClient
             SNINativeMethodWrapper.SNIPacketSetData(packet, _outBuff, _outBytesUsed);
 #endif // MANAGED_SNI
 
-            uint sniError;
             Debug.Assert(Parser.Connection._parserLock.ThreadMayHaveLock(), "Thread is writing without taking the connection lock");
-            Task task = SNIWritePacket(Handle, packet, out sniError, canAccumulate, callerHasConnectionLock: true);
+            Task task = SNIWritePacket(Handle, packet, canAccumulate, callerHasConnectionLock: true);
 
             // Check to see if the timeout has occurred.  This time out code is special case code to allow BCP writes to timeout. Eventually we should make all writes timeout.
             if (_bulkCopyOpperationInProgress && 0 == GetTimeoutRemaining())
@@ -3574,11 +3373,6 @@ namespace System.Data.SqlClient
         {
             if (_sniPacket != null)
             {
-#if MANAGED_SNI
-                SNIProxy.Singleton.PacketReset(_sessionHandle, true, _sniPacket);
-#else
-                SNINativeMethodWrapper.SNIPacketReset(Handle, SNINativeMethodWrapper.IOType.WRITE, _sniPacket, SNINativeMethodWrapper.ConsumerNumber.SNI_Consumer_SNI);
-#endif // MANAGED_SNI
             }
             else
             {
@@ -3594,7 +3388,6 @@ namespace System.Data.SqlClient
         {
             if (_sniPacket != null)
             {
-                _sniPacket.Dispose();
                 _sniPacket = null;
             }
             lock (_writePacketLockObject)
@@ -4032,12 +3825,10 @@ namespace System.Data.SqlClient
         }
 
 #if MANAGED_SNI
-    internal sealed class WritePacketCache : IDisposable {
-            private bool _disposed;
+    internal sealed class WritePacketCache {
             private Stack<SNIPacket> _packets;
 
             public WritePacketCache() {
-                _disposed = false;
                 _packets = new Stack<SNIPacket>();
             }
 
@@ -4056,26 +3847,11 @@ namespace System.Data.SqlClient
             }
 
             public void Add(SNIPacket packet) {
-                if (!_disposed) {
-                    _packets.Push(packet);
-                }
-                else {
-                    // If we're disposed, then get rid of any packets added to us
-                    packet.Dispose();
-                }
+                _packets.Push(packet);
             }
 
             public void Clear() {
-                while (_packets.Count > 0) {
-                    _packets.Pop().Dispose();
-                }
-            }
-
-            public void Dispose() {
-                if (!_disposed) {
-                    _disposed = true;
-                    Clear();
-                }
+                _packets.Clear();
             }
         }
 #endif // MANAGED_SNI

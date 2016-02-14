@@ -2,7 +2,7 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
 using System.Collections.Concurrent;
-using System.Collections.Generic;
+using System.Diagnostics;
 
 namespace System.Data.SqlClient.SNI
 {
@@ -26,17 +26,19 @@ namespace System.Data.SqlClient.SNI
         /// </summary>
         /// <param name="lowerHandle">Lower SNI handle</param>
         /// <returns>SNI error code</returns>
-        public uint CreateMarsConnection(SNIHandle lowerHandle)
+        public SNIError CreateMarsConnection(SNIHandle lowerHandle)
         {
             SNIMarsConnection connection = new SNIMarsConnection(lowerHandle);
 
             if (_connections.TryAdd(lowerHandle, connection))
             {
-                return connection.StartReceive();
+                connection.StartReceive();
+                return null;
             }
             else
             {
-                return TdsEnums.SNI_ERROR;
+                Debug.Assert(false, "Handle already exists in the collection");
+                return new SNIError(SNIProviders.SMUX_PROV, 0, 0, "Internal error: Duplicate handle");
             }
         }
 

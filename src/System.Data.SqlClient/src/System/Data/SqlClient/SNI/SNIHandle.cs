@@ -1,7 +1,6 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-
 namespace System.Data.SqlClient.SNI
 {
     /// <summary>
@@ -26,15 +25,15 @@ namespace System.Data.SqlClient.SNI
         /// </summary>
         /// <param name="packet">SNI packet</param>
         /// <returns>SNI error code</returns>
-        public abstract uint Send(SNIPacket packet);
+        public abstract SNIError Send(SNIPacket packet);
 
         /// <summary>
         /// Send a packet asynchronously
         /// </summary>
         /// <param name="packet">SNI packet</param>
         /// <param name="callback">Completion callback</param>
-        /// <returns>SNI error code</returns>
-        public abstract uint SendAsync(SNIPacket packet, SNIAsyncCallback callback = null);
+        /// <returns>True if completed synchronously, otherwise false</returns>
+        public abstract bool SendAsync(SNIPacket packet, SNIAsyncCallback callback, bool forceCallback, out SNIError error);
 
         /// <summary>
         /// Receive a packet synchronously
@@ -42,19 +41,17 @@ namespace System.Data.SqlClient.SNI
         /// <param name="packet">SNI packet</param>
         /// <param name="timeout">Timeout</param>
         /// <returns>SNI error code</returns>
-        public abstract uint Receive(ref SNIPacket packet, int timeout);
+        public abstract SNIError Receive(ref SNIPacket packet, int timeout);
 
         /// <summary>
         /// Receive a packet asynchronously
         /// </summary>
-        /// <param name="packet">SNI packet</param>
-        /// <returns>SNI error code</returns>
-        public abstract uint ReceiveAsync(ref SNIPacket packet);
+        public abstract bool ReceiveAsync(bool forceCallback, ref SNIPacket packet, out SNIError sniError);
 
         /// <summary>
         /// Enable SSL
         /// </summary>
-        public abstract uint EnableSsl(uint options);
+        public abstract SNIError EnableSsl(uint options);
 
         /// <summary>
         /// Disable SSL
@@ -65,12 +62,7 @@ namespace System.Data.SqlClient.SNI
         /// Check connection status
         /// </summary>
         /// <returns>SNI error code</returns>
-        public abstract uint CheckConnection();
-
-        /// <summary>
-        /// Last handle status
-        /// </summary>
-        public abstract uint Status { get; }
+        public abstract SNIError CheckConnection();
 
         /// <summary>
         /// Connection ID

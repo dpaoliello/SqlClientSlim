@@ -123,8 +123,8 @@ namespace System.Data.SqlClient
                         }
                         else
                         {
-                            // Remove the "initial" callback (this will allow the stateObj to be GC collected if need be)
-                            _cache[i].DecrementPendingCallbacks(false);
+                            // Remove the "initial" callback
+                            _cache[i].DecrementPendingCallbacks();
                         }
                     }
                 }

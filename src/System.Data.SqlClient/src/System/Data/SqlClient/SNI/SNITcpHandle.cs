@@ -1,11 +1,13 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
+using System.Diagnostics;
 using System.IO;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace System.Data.SqlClient.SNI
@@ -28,10 +30,10 @@ namespace System.Data.SqlClient.SNI
         private SslOverTdsStream _sslOverTdsStream;
         private SNIAsyncCallback _receiveCallback;
         private SNIAsyncCallback _sendCallback;
+        private DebugLock _debugLock;
 
         private bool _validateCert = true;
         private int _bufferSize = TdsEnums.DEFAULT_LOGIN_PACKET_SIZE;
-        private uint _status = TdsEnums.SNI_UNINITIALIZED;
         private Guid _connectionId = Guid.NewGuid();
 
         /// <summary>
@@ -39,7 +41,7 @@ namespace System.Data.SqlClient.SNI
         /// </summary>
         public override void Dispose()
         {
-            lock (this)
+            using (_debugLock.Acquire(this))
             {
                 if (_sslOverTdsStream != null)
                 {
@@ -69,17 +71,6 @@ namespace System.Data.SqlClient.SNI
             get
             {
                 return _connectionId;
-            }
-        }
-
-        /// <summary>
-        /// Connection status
-        /// </summary>
-        public override uint Status
-        {
-            get
-            {
-                return _status;
             }
         }
 
@@ -141,13 +132,12 @@ namespace System.Data.SqlClient.SNI
             }
 
             _stream = _tcpStream;
-            _status = TdsEnums.SNI_SUCCESS;
         }
 
         /// <summary>
         /// Enable SSL
         /// </summary>
-        public override uint EnableSsl(uint options)
+        public override SNIError EnableSsl(uint options)
         {
             _validateCert = (options & TdsEnums.SNI_SSL_VALIDATE_CERTIFICATE) != 0;
 
@@ -166,7 +156,7 @@ namespace System.Data.SqlClient.SNI
             }
 
             _stream = _sslStream;
-            return TdsEnums.SNI_SUCCESS;
+            return null;
         }
 
         /// <summary>
@@ -216,14 +206,14 @@ namespace System.Data.SqlClient.SNI
         /// </summary>
         /// <param name="packet">SNI packet</param>
         /// <returns>SNI error code</returns>
-        public override uint Send(SNIPacket packet)
+        public override SNIError Send(SNIPacket packet)
         {
-            lock (this)
+            using (_debugLock.Acquire(this))
             {
                 try
                 {
                     packet.WriteToStream(_stream);
-                    return TdsEnums.SNI_SUCCESS;
+                    return null;
                 }
                 catch (ObjectDisposedException ode)
                 {
@@ -246,9 +236,9 @@ namespace System.Data.SqlClient.SNI
         /// <param name="packet">SNI packet</param>
         /// <param name="timeout">Timeout</param>
         /// <returns>SNI error code</returns>
-        public override uint Receive(ref SNIPacket packet, int timeout)
+        public override SNIError Receive(ref SNIPacket packet, int timeout)
         {
-            lock (this)
+            using (_debugLock.Acquire(this))
             {
                 try
                 {
@@ -259,28 +249,22 @@ namespace System.Data.SqlClient.SNI
 
                     if (packet.Length == 0)
                     {
-                        return ReportErrorAndReleasePacket(packet, "Connection was terminated");
+                        return ReportError(packet, "Connection was terminated");
                     }
 
-                    return TdsEnums.SNI_SUCCESS;
+                    return null;
                 }
                 catch (ObjectDisposedException ode)
                 {
-                    return ReportErrorAndReleasePacket(packet, ode.Message);
+                    return ReportError(packet, ode.Message);
                 }
                 catch (SocketException se)
                 {
-                    return ReportErrorAndReleasePacket(packet, se.Message);
+                    return ReportError(packet, se.Message);
                 }
                 catch (IOException ioe)
                 {
-                    uint errorCode = ReportErrorAndReleasePacket(packet, ioe.Message);
-                    if (ioe.InnerException is SocketException && ((SocketException)(ioe.InnerException)).SocketErrorCode == SocketError.TimedOut)
-                    {
-                        errorCode = TdsEnums.SNI_WAIT_TIMEOUT;
-                    }
-
-                    return errorCode;
+                    return ReportError(packet, ioe.Message);
                 }
                 finally
                 {
@@ -307,46 +291,116 @@ namespace System.Data.SqlClient.SNI
         /// <param name="packet">SNI packet</param>
         /// <param name="callback">Completion callback</param>
         /// <returns>SNI error code</returns>
-        public override uint SendAsync(SNIPacket packet, SNIAsyncCallback callback = null)
+        public override bool SendAsync(SNIPacket packet, SNIAsyncCallback callback, bool forceCallback, out SNIError sniError)
         {
-            SNIPacket newPacket = packet;
-
-            _writeTaskFactory.StartNew(() =>
+            try
             {
-                try
+                Task writeTask;
+                using (_debugLock.Acquire(this))
                 {
-                    lock (this)
-                    {
-                        packet.WriteToStream(_stream);
-                    }
+                    writeTask = packet.WriteToStreamAsync(_stream);
                 }
-                catch (Exception e)
-                {
-                    SNILoadHandle.SingletonInstance.LastError = new SNIError(SNIProviders.TCP_PROV, 0, 0, e.Message);
 
-                    if (callback != null)
+                if (writeTask.IsCompleted && !forceCallback)
+                {
+                    if (writeTask.IsFaulted)
                     {
-                        callback(packet, TdsEnums.SNI_ERROR);
+                        sniError = new SNIError(SNIProviders.TCP_PROV, 0, 0, writeTask.Exception.Message);
                     }
                     else
                     {
-                        _sendCallback(packet, TdsEnums.SNI_ERROR);
+                        sniError = null;
                     }
-
-                    return;
-                }
-
-                if (callback != null)
-                {
-                    callback(packet, TdsEnums.SNI_SUCCESS);
+                    return true;
                 }
                 else
                 {
-                    _sendCallback(packet, TdsEnums.SNI_SUCCESS);
+                    writeTask.ContinueWith(SendAsyncContinuation,
+                        Tuple.Create(packet, callback),
+                        CancellationToken.None,
+                        TaskContinuationOptions.DenyChildAttach,
+                        TaskScheduler.Default);
+                    sniError = null;
+                    return false;
                 }
-            });
+            }
+            catch (ObjectDisposedException ode)
+            {
+                sniError = ReportError(packet, ode.Message);
+            }
+            catch (SocketException se)
+            {
+                sniError = ReportError(packet, se.Message);
+            }
+            catch (IOException ioe)
+            {
+                sniError = ReportError(packet, ioe.Message);
+            }
 
-            return TdsEnums.SNI_SUCCESS_IO_PENDING;
+            // Fallthrough: We caught an error
+            Debug.Assert(sniError != null, "Should have either set an error or returned early");
+            if (forceCallback)
+            {
+                Task.Factory.StartNew(SendAsyncErrorContinuation,
+                    Tuple.Create(packet, callback, sniError),
+                    CancellationToken.None,
+                    TaskCreationOptions.DenyChildAttach,
+                    TaskScheduler.Default);
+                sniError = null;
+                return false;
+            }
+            else
+            {
+                return true;
+            }
+        }
+
+        private void SendAsyncErrorContinuation(object rawState)
+        {
+            var state = (Tuple<SNIPacket, SNIAsyncCallback, SNIError>)rawState;
+            SNIPacket packet = state.Item1;
+            SNIAsyncCallback callback = state.Item2;
+            SNIError sniError = state.Item3;
+            if (callback != null)
+            {
+                callback(packet, sniError);
+            }
+            else
+            {
+                _sendCallback(packet, sniError);
+            }
+        }
+
+        private void SendAsyncContinuation(Task task, object rawState)
+        {
+            var state = (Tuple<SNIPacket, SNIAsyncCallback>)rawState;
+            SNIPacket packet = state.Item1;
+            SNIAsyncCallback callback = state.Item2;
+
+            if (task.IsFaulted)
+            {
+                SNIError sniError = new SNIError(SNIProviders.TCP_PROV, 0, 0, task.Exception.Message);
+
+                if (callback != null)
+                {
+                    callback(packet, sniError);
+                }
+                else
+                {
+                    _sendCallback(packet, sniError);
+                }
+            }
+            else
+            {
+                if (callback != null)
+                {
+                    callback(packet, null);
+                }
+                else
+                {
+                    _sendCallback(packet, null);
+                }
+            }
         }
 
         /// <summary>
@@ -354,9 +408,9 @@ namespace System.Data.SqlClient.SNI
         /// </summary>
         /// <param name="packet">SNI packet</param>
         /// <returns>SNI error code</returns>
-        public override uint ReceiveAsync(ref SNIPacket packet)
+        public override bool ReceiveAsync(bool forceCallback, ref SNIPacket packet, out SNIError sniError)
         {
-            lock (this)
+            using (_debugLock.Acquire(this))
             {
                 packet = new SNIPacket(null);
                 packet.Allocate(_bufferSize);
@@ -364,21 +418,45 @@ namespace System.Data.SqlClient.SNI
                 try
                 {
                     packet.ReadFromStreamAsync(_stream, _receiveCallback);
-                    return TdsEnums.SNI_SUCCESS_IO_PENDING;
+                    sniError = null;
+                    return false;
                 }
                 catch (ObjectDisposedException ode)
                 {
-                    return ReportErrorAndReleasePacket(packet, ode.Message);
+                    sniError = ReportError(packet, ode.Message);
                 }
                 catch (SocketException se)
                 {
-                    return ReportErrorAndReleasePacket(packet, se.Message);
+                    sniError = ReportError(packet, se.Message);
                 }
                 catch (IOException ioe)
                 {
-                    return ReportErrorAndReleasePacket(packet, ioe.Message);
+                    sniError = ReportError(packet, ioe.Message);
                 }
+
+                // Fallthrough: Something failed
+                Debug.Assert(sniError != null, "Error should be set if we didn't already return");
+                if (forceCallback)
+                {
+                    Task.Factory.StartNew(
+                        ReceiveAsyncErrorContinuation,
+                        Tuple.Create(packet, sniError),
+                        CancellationToken.None,
+                        TaskCreationOptions.DenyChildAttach,
+                        TaskScheduler.Default);
+                    sniError = null;
+                    return false;
+                }
+                return true;
             }
+        }
+
+        private void ReceiveAsyncErrorContinuation(object rawState)
+        {
+            var state = (Tuple<SNIPacket, SNIError>)rawState;
+            SNIPacket packet = state.Item1;
+            SNIError sniError = state.Item2;
+            _receiveCallback(packet, sniError);
         }
 
         /// <summary>
@@ -386,13 +464,13 @@ namespace System.Data.SqlClient.SNI
         /// </summary>
         /// <param name="handle"></param>
         /// <returns>SNI error status</returns>
-        public override uint CheckConnection()
+        public override SNIError CheckConnection()
         {
             try
             {
                 if (!_socket.Connected || _socket.Poll(0, SelectMode.SelectError))
                 {
-                    return TdsEnums.SNI_ERROR;
+                    return ReportTcpSNIError("Connection was disconnected");
                 }
             }
             catch (SocketException se)
@@ -404,23 +482,21 @@ namespace System.Data.SqlClient.SNI
                 return ReportTcpSNIError(ode.Message);
             }
 
-            return TdsEnums.SNI_SUCCESS;
+            return null;
         }
 
-        private uint ReportTcpSNIError(uint nativeError, uint sniError, string errorMessage)
+        private SNIError ReportTcpSNIError(uint nativeError, uint sniError, string errorMessage)
         {
-            _status = TdsEnums.SNI_ERROR;
-            return SNICommon.ReportSNIError(SNIProviders.TCP_PROV, nativeError, sniError, errorMessage);
+            return new SNIError(SNIProviders.TCP_PROV, nativeError, sniError, errorMessage);
         }
 
-        private uint ReportTcpSNIError(string errorMessage)
+        private SNIError ReportTcpSNIError(string errorMessage)
         {
             return ReportTcpSNIError(0, 0, errorMessage);
         }
 
-        private uint ReportErrorAndReleasePacket(SNIPacket packet, string errorMessage)
+        private SNIError ReportError(SNIPacket packet, string errorMessage)
         {
-            packet.Release();
             return ReportTcpSNIError(0, 0, errorMessage);
         }
 
@@ -432,6 +508,51 @@ namespace System.Data.SqlClient.SNI
         {
             _socket.Shutdown(SocketShutdown.Both);
         }
-#endif		
+#endif
+
+        private struct DebugLock
+        {
+            private const int NoThread = 0;
+#if DEBUG
+            private int _threadHoldingLock;
+#endif
+
+            public IDisposable Acquire(SNITCPHandle handle)
+            {
+#if DEBUG
+                int previousThread = Interlocked.CompareExchange(ref _threadHoldingLock, Thread.CurrentThread.ManagedThreadId, NoThread);
+                if (previousThread != NoThread)
+                {
+                    Debug.Assert(false, $"Another thread is holding the lock: {previousThread}");
+                }
+                return new Holder(handle);
+#else
+                return null;
+#endif
+            }
+
+            public void Release()
+            {
+#if DEBUG
+                int previousThread = Interlocked.CompareExchange(ref _threadHoldingLock, NoThread, Thread.CurrentThread.ManagedThreadId);
+                Debug.Assert(previousThread == Thread.CurrentThread.ManagedThreadId, "This thread was not holding the lock");
+#endif
+            }
+
+            private struct Holder : IDisposable
+            {
+                private readonly SNITCPHandle _handle;
+
+                public Holder(SNITCPHandle handle)
+                {
+                    _handle = handle;
+                }
+
+                public void Dispose()
+                {
+                    _handle._debugLock.Release();
+                }
+            }
+        }
     }
 }

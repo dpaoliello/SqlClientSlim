@@ -12,8 +12,7 @@
     <PackageTargetFramework>dotnet</PackageTargetFramework>
     <UsePackageTargetRuntimeDefaults>true</UsePackageTargetRuntimeDefaults>
     <ProjectGuid>{D4550556-4745-457F-BA8F-3EBF3836D6B4}</ProjectGuid>
-  </PropertyGroup>
-  <PropertyGroup>
+    <LangVersion>6</LangVersion>
     <DefineConstants>$(DefineConstants);MANAGED_SNI</DefineConstants>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
@@ -148,7 +147,6 @@
     <Compile Include="$(CommonPath)\System\NotImplemented.cs" />
     <Compile Include="System\Data\SqlClient\SNI\SNIError.cs" />
     <Compile Include="System\Data\SqlClient\SNI\SNIHandle.cs" />
-    <Compile Include="System\Data\SqlClient\SNI\SNILoadHandle.cs" />
     <Compile Include="System\Data\SqlClient\SNI\SNIMarsConnection.cs" />
     <Compile Include="System\Data\SqlClient\SNI\SNIMarsHandle.cs" />
     <Compile Include="System\Data\SqlClient\SNI\SNIMarsManager.cs" />

@@ -10,13 +10,15 @@ namespace System.Data.SqlClient.SNI
     /// <summary>
     /// SNI Packet
     /// </summary>
-    internal class SNIPacket : IDisposable, IEquatable<SNIPacket>
+    internal class SNIPacket : IEquatable<SNIPacket>
     {
         private byte[] _data;
         private int _length;
         private int _capacity;
         private int _offset;
+#if DEBUG
         private string _description;
+#endif
         private SNIAsyncCallback _completionCallback;
 
         /// <summary>
@@ -28,6 +30,7 @@ namespace System.Data.SqlClient.SNI
             _offset = 0;
         }
 
+#if DEBUG
         /// <summary>
         /// Packet description (used for debugging)
         /// </summary>
@@ -43,6 +46,7 @@ namespace System.Data.SqlClient.SNI
                 _description = value;
             }
         }
+#endif
 
         /// <summary>
         /// Data left to process
@@ -78,16 +82,6 @@ namespace System.Data.SqlClient.SNI
         }
 
         /// <summary>
-        /// Packet data
-        /// </summary>
-        public void Dispose()
-        {
-            _data = null;
-            _length = 0;
-            _capacity = 0;
-        }
-
-        /// <summary>
         /// Set async completion callback
         /// </summary>
         /// <param name="completionCallback">Completion callback</param>
@@ -99,10 +93,10 @@ namespace System.Data.SqlClient.SNI
         /// <summary>
         /// Invoke the completion callback 
         /// </summary>
-        /// <param name="sniErrorCode">SNI error</param>
-        public void InvokeCompletionCallback(uint sniErrorCode)
+        /// <param name="sniError">SNI error</param>
+        public void InvokeCompletionCallback(SNIError sniError)
         {
-            _completionCallback(this, sniErrorCode);
+            _completionCallback(this, sniError);
         }
 
         /// <summary>
@@ -111,8 +105,11 @@ namespace System.Data.SqlClient.SNI
         /// <param name="capacity">Bytes to allocate</param>
         public void Allocate(int capacity)
         {
-            _capacity = capacity;
-            _data = new Byte[capacity];
+            if (_capacity != capacity)
+            {
+                _capacity = capacity;
+                _data = new byte[capacity];
+            }
         }
 
         /// <summary>
@@ -123,7 +120,7 @@ namespace System.Data.SqlClient.SNI
         {
             SNIPacket packet = new SNIPacket(null);
             packet._data = new byte[_length];
-            Array.Copy(_data, 0, packet._data, 0, _length);
+            Buffer.BlockCopy(_data, 0, packet._data, 0, _length);
             packet._length = _length;
 
             return packet;
@@ -212,22 +209,12 @@ namespace System.Data.SqlClient.SNI
         }
 
         /// <summary>
-        /// Release packet
-        /// </summary>
-        public void Release()
-        {
-            _length = 0;
-            _capacity = 0;
-            _data = null;
-        }
-
-        /// <summary>
         /// Reset packet 
         /// </summary>
         public void Reset()
         {
             _length = 0;
-            _data = new byte[_capacity];
+            Array.Clear(_data, 0, _capacity);
         }
 
         /// <summary>
@@ -237,37 +224,35 @@ namespace System.Data.SqlClient.SNI
         /// <param name="callback">Completion callback</param>
         public void ReadFromStreamAsync(Stream stream, SNIAsyncCallback callback)
         {
-            bool error = false;
+            stream.ReadAsync(_data, 0, _capacity).ContinueWith(
+                ReadFromStreamAsyncContinuation,
+                callback,
+                CancellationToken.None,
+                TaskContinuationOptions.DenyChildAttach,
+                TaskScheduler.Default);
+        }
 
-            stream.ReadAsync(_data, 0, _capacity).ContinueWith(t =>
+        private void ReadFromStreamAsyncContinuation(Task<int> t, object state)
+        {
+            SNIAsyncCallback callback = (SNIAsyncCallback)state;
+            SNIError error = null;
+
+            Exception e = t.Exception != null ? t.Exception.InnerException : null;
+            if (e != null)
             {
-                Exception e = t.Exception != null ? t.Exception.InnerException : null;
-                if (e != null)
-                {
-                    SNILoadHandle.SingletonInstance.LastError = new SNIError(SNIProviders.TCP_PROV, 0, 0, e.Message);
-                    error = true;
-                }
-                else
-                {
-                    _length = t.Result;
+                error = new SNIError(SNIProviders.TCP_PROV, 0, 0, e.Message);
+            }
+            else
+            {
+                _length = t.Result;
 
-                    if (_length == 0)
-                    {
-                        SNILoadHandle.SingletonInstance.LastError = new SNIError(SNIProviders.TCP_PROV, 0, 0, "Connection was terminated");
-                        error = true;
-                    }
-                }
-
-                if (error)
+                if (_length == 0)
                 {
-                    this.Release();
+                    error = new SNIError(SNIProviders.TCP_PROV, 0, 0, "Connection was terminated");
                 }
+            }
 
-                callback(this, error ? TdsEnums.SNI_ERROR : TdsEnums.SNI_SUCCESS);
-            },
-            CancellationToken.None,
-            TaskContinuationOptions.DenyChildAttach,
-            TaskScheduler.Default);
+            callback(this, error);
         }
 
         /// <summary>
@@ -286,6 +271,15 @@ namespace System.Data.SqlClient.SNI
         public void WriteToStream(Stream stream)
         {
             stream.Write(_data, 0, _length);
+        }
+
+        /// <summary>
+        /// Write data to a stream asynchronously
+        /// </summary>
+        /// <param name="stream">Stream to write to</param>
+        public Task WriteToStreamAsync(Stream stream)
+        {
+            return stream.WriteAsync(_data, 0, _length);
         }
 
         /// <summary>

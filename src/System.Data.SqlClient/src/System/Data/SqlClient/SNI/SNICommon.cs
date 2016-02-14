@@ -11,7 +11,7 @@ namespace System.Data.SqlClient.SNI
     /// </summary>
     /// <param name="packet">SNI packet</param>
     /// <param name="sniErrorCode">SNI error code</param>
-    internal delegate void SNIAsyncCallback(SNIPacket packet, uint sniErrorCode);
+    internal delegate void SNIAsyncCallback(SNIPacket packet, SNIError sniError);
 
     /// <summary>
     /// SNI provider identifiers
@@ -109,20 +109,6 @@ namespace System.Data.SqlClient.SNI
                 return false;
             }
             return true;
-        }
-
-        /// <summary>
-        /// Sets last error encountered for SNI
-        /// </summary>
-        /// <param name="provider">SNI provider</param>
-        /// <param name="nativeError">Native error code</param>
-        /// <param name="sniError">SNI error code</param>
-        /// <param name="errorMessage">Error message</param>
-        /// <returns></returns>
-        internal static uint ReportSNIError(SNIProviders provider, uint nativeError, uint sniError, string errorMessage)
-        {
-            SNILoadHandle.SingletonInstance.LastError = new SNIError(provider, nativeError, sniError, errorMessage);
-            return TdsEnums.SNI_ERROR;
         }
     }
 }

@@ -12,45 +12,14 @@ namespace System.Data.SqlClient.SNI
     {
         public static readonly SNIProxy Singleton = new SNIProxy();
 
-        private readonly GCHandle _gcHandle;
-
-        /// <summary>
-        /// Terminate SNI
-        /// </summary>
-        public void Terminate()
-        {
-        }
-
-        /// <summary>
-        /// Check if GC handle is allocated
-        /// </summary>
-        /// <returns></returns>
-        public bool IsGcHandleAllocated()
-        {
-            return _gcHandle.IsAllocated;
-        }
-
-        /// <summary>
-        /// Free GC handle
-        /// </summary>
-        public void FreeGcHandle()
-        {
-            _gcHandle.Free();
-        }
-
         /// <summary>
         /// Enable MARS support on a connection
         /// </summary>
         /// <param name="handle">Connection handle</param>
         /// <returns>SNI error code</returns>
-        public uint EnableMars(SNIHandle handle)
+        public SNIError EnableMars(SNIHandle handle)
         {
-            if (SNIMarsManager.Singleton.CreateMarsConnection(handle) == TdsEnums.SNI_SUCCESS_IO_PENDING)
-            {
-                return TdsEnums.SNI_SUCCESS;
-            }
-
-            return TdsEnums.SNI_ERROR;
+            return SNIMarsManager.Singleton.CreateMarsConnection(handle);
         }
 
         /// <summary>
@@ -58,7 +27,7 @@ namespace System.Data.SqlClient.SNI
         /// </summary>
         /// <param name="handle">Connection handle</param>
         /// <returns>SNI error code</returns>
-        public uint EnableSsl(SNIHandle handle, uint options)
+        public SNIError EnableSsl(SNIHandle handle, uint options)
         {
             try
             {
@@ -66,8 +35,7 @@ namespace System.Data.SqlClient.SNI
             }
             catch (Exception e)
             {
-                SNILoadHandle.SingletonInstance.LastError = new SNIError(SNIProviders.TCP_PROV, 0, 0, string.Format("Encryption(ssl/tls) handshake failed: {0}", e.ToString()));
-                return TdsEnums.SNI_ERROR;
+                return new SNIError(SNIProviders.TCP_PROV, 0, 0, string.Format("Encryption(ssl/tls) handshake failed: {0}", e.ToString()));
             }
         }
 
@@ -76,10 +44,9 @@ namespace System.Data.SqlClient.SNI
         /// </summary>
         /// <param name="handle">Connection handle</param>
         /// <returns>SNI error code</returns>
-        public uint DisableSsl(SNIHandle handle)
+        public void DisableSsl(SNIHandle handle)
         {
             handle.DisableSsl();
-            return TdsEnums.SNI_SUCCESS;
         }
 
         /// <summary>
@@ -145,7 +112,7 @@ namespace System.Data.SqlClient.SNI
         /// <param name="packet">SNI packet</param>
         /// <param name="timeout">Timeout</param>
         /// <returns>SNI error status</returns>
-        public uint ReadSyncOverAsync(SNIHandle handle, ref SNIPacket packet, int timeout)
+        public SNIError ReadSyncOverAsync(SNIHandle handle, ref SNIPacket packet, int timeout)
         {
             return handle.Receive(ref packet, timeout);
         }
@@ -169,16 +136,17 @@ namespace System.Data.SqlClient.SNI
         /// <param name="handle">SNI handle</param>
         /// <param name="packet">SNI packet</param>
         /// <param name="sync">true if synchronous, false if asynchronous</param>
-        /// <returns>SNI error status</returns>
-        public uint WritePacket(SNIHandle handle, SNIPacket packet, bool sync)
+        /// <returns>True if completed synchronous, otherwise false</returns>
+        public bool WritePacket(SNIHandle handle, SNIPacket packet, bool sync, out SNIError sniError)
         {
             if (sync)
             {
-                return handle.Send(packet.Clone());
+                sniError = handle.Send(packet.Clone());
+                return true;
             }
             else
             {
-                return handle.SendAsync(packet.Clone());
+                return handle.SendAsync(packet.Clone(), null, false, out sniError);
             }
         }
 
@@ -202,10 +170,9 @@ namespace System.Data.SqlClient.SNI
         /// <param name="timerExpire">Timer expiration</param>
         /// <param name="instanceName">Instance name</param>
         /// <param name="flushCache">Flush packet cache</param>
-        /// <param name="async">Asynchronous connection</param>
         /// <param name="parallel">Attempt parallel connects</param>
         /// <returns>SNI handle</returns>
-        public SNIHandle CreateConnectionHandle(object callbackObject, string fullServerName, bool ignoreSniOpenTimeout, long timerExpire, out byte[] instanceName, bool flushCache, bool async, bool parallel)
+        public SNIHandle CreateConnectionHandle(object callbackObject, string fullServerName, bool ignoreSniOpenTimeout, long timerExpire, out byte[] instanceName, bool flushCache, bool parallel, out SNIError sniError)
         {
             instanceName = new byte[1];
             instanceName[0] = 0;
@@ -214,23 +181,23 @@ namespace System.Data.SqlClient.SNI
 
             if (serverNameParts.Length > 2)
             {
-                SNILoadHandle.SingletonInstance.LastError = new SNIError(SNIProviders.INVALID_PROV, 0, 0, "Connection string is not formatted correctly");
+                sniError = new SNIError(SNIProviders.INVALID_PROV, 0, 0, "Connection string is not formatted correctly");
                 return null;
             }
 
             // Default to using tcp if no protocol is provided
             if (serverNameParts.Length == 1)
             {
-                return ConstructTcpHandle(serverNameParts[0], timerExpire, callbackObject);
+                return ConstructTcpHandle(serverNameParts[0], timerExpire, callbackObject, out sniError);
             }
 
             switch (serverNameParts[0])
             {
                 case TdsEnums.TCP:
-                    return ConstructTcpHandle(serverNameParts[1], timerExpire, callbackObject);
+                    return ConstructTcpHandle(serverNameParts[1], timerExpire, callbackObject, out sniError);
 
                 default:
-                    SNILoadHandle.SingletonInstance.LastError = new SNIError(SNIProviders.INVALID_PROV, 0, 0, string.Format("Unsupported transport protocol: '{0}'", serverNameParts[0]));
+                    sniError = new SNIError(SNIProviders.INVALID_PROV, 0, 0, string.Format("Unsupported transport protocol: '{0}'", serverNameParts[0]));
                     return null;
             }
         }
@@ -242,7 +209,7 @@ namespace System.Data.SqlClient.SNI
         /// <param name="timerExpire">Timer expiration</param>
         /// <param name="callbackObject">Asynchronous I/O callback object</param>
         /// <returns></returns>
-        private SNITCPHandle ConstructTcpHandle(string fullServerName, long timerExpire, object callbackObject)
+        private SNITCPHandle ConstructTcpHandle(string fullServerName, long timerExpire, object callbackObject, out SNIError sniError)
         {
             // TCP Format: 
             // tcp:<host name>\<instance name>
@@ -258,16 +225,17 @@ namespace System.Data.SqlClient.SNI
                 }
                 catch (Exception)
                 {
-                    SNILoadHandle.SingletonInstance.LastError = new SNIError(SNIProviders.TCP_PROV, 0, 0, "Port number is malformed");
+                    sniError = new SNIError(SNIProviders.TCP_PROV, 0, 0, "Port number is malformed");
                     return null;
                 }
             }
             else if (serverAndPortParts.Length > 2)
             {
-                SNILoadHandle.SingletonInstance.LastError = new SNIError(SNIProviders.TCP_PROV, 0, 0, "Connection string is not formatted correctly");
+                sniError = new SNIError(SNIProviders.TCP_PROV, 0, 0, "Connection string is not formatted correctly");
                 return null;
             }
 
+            sniError = null;
             return new SNITCPHandle(serverAndPortParts[0], portNumber, timerExpire, callbackObject);
         }
 
@@ -279,23 +247,20 @@ namespace System.Data.SqlClient.SNI
         /// <param name="defaultBufferSize">Default buffer size</param>
         /// <param name="async">Asynchronous connection</param>
         /// <returns>SNI error status</returns>
-        public SNIHandle CreateMarsHandle(object callbackObject, SNIHandle physicalConnection, int defaultBufferSize, bool async)
+        public SNIHandle CreateMarsHandle(TdsParserStateObject callbackObject, SNIHandle physicalConnection, int defaultBufferSize, out SNIError sniError)
         {
             SNIMarsConnection connection = SNIMarsManager.Singleton.GetConnection(physicalConnection);
-            return connection.CreateSession(callbackObject, async);
+            return connection.CreateSession(callbackObject, out sniError);
         }
 
         /// <summary>
         /// Read packet asynchronously
         /// </summary>
-        /// <param name="handle">SNI handle</param>
-        /// <param name="packet">Packet</param>
-        /// <returns>SNI error status</returns>
-        public uint ReadAsync(SNIHandle handle, ref SNIPacket packet)
+        public bool ReadAsync(SNIHandle handle, ref SNIPacket packet, out SNIError sniError)
         {
             packet = new SNIPacket(null);
 
-            return handle.ReceiveAsync(ref packet);
+            return handle.ReceiveAsync(false, ref packet, out sniError);
         }
 
         /// <summary>
@@ -310,31 +275,13 @@ namespace System.Data.SqlClient.SNI
         }
 
         /// <summary>
-        /// Release packet
-        /// </summary>
-        /// <param name="packet">SNI packet</param>
-        public void PacketRelease(SNIPacket packet)
-        {
-            packet.Release();
-        }
-
-        /// <summary>
         /// Check SNI handle connection
         /// </summary>
         /// <param name="handle"></param>
         /// <returns>SNI error status</returns>
-        public uint CheckConnection(SNIHandle handle)
+        public SNIError CheckConnection(SNIHandle handle)
         {
             return handle.CheckConnection();
-        }
-
-        /// <summary>
-        /// Get last SNI error on this thread
-        /// </summary>
-        /// <returns></returns>
-        public SNIError GetLastError()
-        {
-            return SNILoadHandle.SingletonInstance.LastError;
         }
     }
 }

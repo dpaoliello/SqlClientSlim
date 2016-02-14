@@ -44,12 +44,12 @@ namespace System.Data.SqlClient.SNI
             _lowerHandle.SetAsyncCallbacks(HandleReceiveComplete, HandleSendComplete);
         }
 
-        public SNIMarsHandle CreateSession(object callbackObject, bool async)
+        public SNIMarsHandle CreateSession(TdsParserStateObject callbackObject, out SNIError sniError)
         {
             lock (this)
             {
                 ushort sessionId = _nextSessionId++;
-                SNIMarsHandle handle = new SNIMarsHandle(this, sessionId, callbackObject, async);
+                SNIMarsHandle handle = new SNIMarsHandle(this, sessionId, callbackObject, out sniError);
                 _sessions.Add(sessionId, handle);
                 return handle;
             }
@@ -58,18 +58,10 @@ namespace System.Data.SqlClient.SNI
         /// <summary>
         /// Start receiving
         /// </summary>
-        /// <returns></returns>
-        public uint StartReceive()
+        public void StartReceive()
         {
             SNIPacket packet = null;
-
-            if (ReceiveAsync(ref packet) == TdsEnums.SNI_SUCCESS_IO_PENDING)
-            {
-                return TdsEnums.SNI_SUCCESS_IO_PENDING;
-            }
-
-            SNILoadHandle.SingletonInstance.LastError = new SNIError(SNIProviders.TCP_PROV, 0, 0, "Could not start MARS async receive");
-            return TdsEnums.SNI_ERROR;
+            ReceiveAsync(ref packet);
         }
 
         /// <summary>
@@ -77,7 +69,7 @@ namespace System.Data.SqlClient.SNI
         /// </summary>
         /// <param name="packet">SNI packet</param>
         /// <returns>SNI error code</returns>
-        public uint Send(SNIPacket packet)
+        public SNIError Send(SNIPacket packet)
         {
             lock (this)
             {
@@ -90,12 +82,12 @@ namespace System.Data.SqlClient.SNI
         /// </summary>
         /// <param name="packet">SNI packet</param>
         /// <param name="callback">Completion callback</param>
-        /// <returns>SNI error code</returns>
-        public uint SendAsync(SNIPacket packet, SNIAsyncCallback callback)
+        /// <returns>True if completed synchronously, otherwise false</returns>
+        public bool SendAsync(SNIPacket packet, SNIAsyncCallback callback, bool forceCallback, out SNIError sniError)
         {
             lock (this)
             {
-                return _lowerHandle.SendAsync(packet, callback);
+                return _lowerHandle.SendAsync(packet, callback, forceCallback, out sniError);
             }
         }
 
@@ -103,12 +95,14 @@ namespace System.Data.SqlClient.SNI
         /// Receive a packet asynchronously
         /// </summary>
         /// <param name="packet">SNI packet</param>
-        /// <returns>SNI error code</returns>
-        public uint ReceiveAsync(ref SNIPacket packet)
+        /// <returns>True if completed synchronous, otherwise false</returns>
+        public void ReceiveAsync(ref SNIPacket packet)
         {
             lock (this)
             {
-                return _lowerHandle.ReceiveAsync(ref packet);
+                SNIError sniError;
+                bool completedSync = _lowerHandle.ReceiveAsync(true, ref packet, out sniError);
+                Debug.Assert(!completedSync && (sniError == null), "Should not have completed sync");
             }
         }
 
@@ -117,7 +111,7 @@ namespace System.Data.SqlClient.SNI
         /// </summary>
         /// <param name="handle"></param>
         /// <returns>SNI error status</returns>
-        public uint CheckConnection()
+        public SNIError CheckConnection()
         {
             lock (this)
             {
@@ -128,42 +122,38 @@ namespace System.Data.SqlClient.SNI
         /// <summary>
         /// Process a receive error
         /// </summary>
-        public void HandleReceiveError()
+        public void HandleReceiveError(SNIError sniError)
         {
             Debug.Assert(Monitor.IsEntered(this), "HandleReceiveError was called without being locked.");
             foreach (SNIMarsHandle handle in _sessions.Values)
             {
-                handle.HandleReceiveError();
+                handle.HandleReceiveError(new SNIPacket(handle), sniError);
             }
         }
 
         /// <summary>
         /// Process a send completion
         /// </summary>
-        /// <param name="packet">SNI packet</param>
-        /// <param name="sniErrorCode">SNI error code</param>
-        public void HandleSendComplete(SNIPacket packet, uint sniErrorCode)
+        public void HandleSendComplete(SNIPacket packet, SNIError sniError)
         {
-            packet.InvokeCompletionCallback(sniErrorCode);
+            packet.InvokeCompletionCallback(sniError);
         }
 
         /// <summary>
         /// Process a receive completion
         /// </summary>
-        /// <param name="packet">SNI packet</param>
-        /// <param name="sniErrorCode">SNI error code</param>
-        public void HandleReceiveComplete(SNIPacket packet, uint sniErrorCode)
+        public void HandleReceiveComplete(SNIPacket packet, SNIError sniError)
         {
             SNISMUXHeader currentHeader = null;
             SNIPacket currentPacket = null;
             SNIMarsHandle currentSession = null;
 
 
-            if (sniErrorCode != TdsEnums.SNI_SUCCESS)
+            if (sniError != null)
             {
                 lock (this)
                 {
-                    HandleReceiveError();
+                    HandleReceiveError(sniError);
                     return;
                 }
             }
@@ -172,6 +162,8 @@ namespace System.Data.SqlClient.SNI
             {
                 lock (this)
                 {
+                    bool sessionRemoved = false;
+
                     if (_currentHeaderByteCount != SNISMUXHeader.HEADER_LENGTH)
                     {
                         currentHeader = null;
@@ -185,14 +177,7 @@ namespace System.Data.SqlClient.SNI
 
                             if (bytesTaken == 0)
                             {
-                                sniErrorCode = ReceiveAsync(ref packet);
-
-                                if (sniErrorCode == TdsEnums.SNI_SUCCESS_IO_PENDING)
-                                {
-                                    return;
-                                }
-
-                                HandleReceiveError();
+                                ReceiveAsync(ref packet);
                                 return;
                             }
                         }
@@ -214,6 +199,7 @@ namespace System.Data.SqlClient.SNI
                         if (_currentHeader.flags == (byte)SNISMUXFlags.SMUX_FIN)
                         {
                             _sessions.Remove(_currentHeader.sessionId);
+                            sessionRemoved = true;
                         }
                     }
 
@@ -229,14 +215,7 @@ namespace System.Data.SqlClient.SNI
 
                             if (_dataBytesLeft > 0)
                             {
-                                sniErrorCode = ReceiveAsync(ref packet);
-
-                                if (sniErrorCode == TdsEnums.SNI_SUCCESS_IO_PENDING)
-                                {
-                                    return;
-                                }
-
-                                HandleReceiveError();
+                                ReceiveAsync(ref packet);
                                 return;
                             }
                         }
@@ -244,32 +223,25 @@ namespace System.Data.SqlClient.SNI
 
                     _currentHeaderByteCount = 0;
 
-                    if (!_sessions.ContainsKey(_currentHeader.sessionId))
+                    if (!sessionRemoved && !_sessions.TryGetValue(_currentHeader.sessionId, out currentSession))
                     {
-                        SNILoadHandle.SingletonInstance.LastError = new SNIError(SNIProviders.TCP_PROV, 0, 0, "Packet for unknown MARS session received");
-                        HandleReceiveError();
+                        sniError = new SNIError(SNIProviders.TCP_PROV, 0, 0, "Packet for unknown MARS session received");
+                        HandleReceiveError(sniError);
                         _lowerHandle.Dispose();
                         _lowerHandle = null;
                         return;
                     }
-
-                    currentSession = _sessions[_currentHeader.sessionId];
                 }
 
-                if (currentHeader.flags == (byte)SNISMUXFlags.SMUX_DATA)
+                if (currentSession != null)
                 {
-                    currentSession.HandleReceiveComplete(currentPacket, currentHeader);
-                }
-
-                if (_currentHeader.flags == (byte)SNISMUXFlags.SMUX_ACK)
-                {
-                    try
+                    if (currentHeader.flags == (byte)SNISMUXFlags.SMUX_DATA)
+                    {
+                        currentSession.HandleReceiveComplete(currentPacket, currentHeader);
+                    }
+                    else if (_currentHeader.flags == (byte)SNISMUXFlags.SMUX_ACK)
                     {
                         currentSession.HandleAck(currentHeader.highwater);
-                    }
-                    catch (Exception e)
-                    {
-                        SNICommon.ReportSNIError(SNIProviders.TCP_PROV, 0, 0, e.Message);
                     }
                 }
 
@@ -277,14 +249,7 @@ namespace System.Data.SqlClient.SNI
                 {
                     if (packet.DataLeft == 0)
                     {
-                        sniErrorCode = ReceiveAsync(ref packet);
-
-                        if (sniErrorCode == TdsEnums.SNI_SUCCESS_IO_PENDING)
-                        {
-                            return;
-                        }
-
-                        HandleReceiveError();
+                        ReceiveAsync(ref packet);
                         return;
                     }
                 }
@@ -294,7 +259,7 @@ namespace System.Data.SqlClient.SNI
         /// <summary>
         /// Enable SSL
         /// </summary>
-        public uint EnableSsl(uint options)
+        public SNIError EnableSsl(uint options)
         {
             return _lowerHandle.EnableSsl(options);
         }

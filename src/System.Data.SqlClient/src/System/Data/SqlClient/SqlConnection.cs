@@ -665,10 +665,7 @@ namespace System.Data.SqlClient
                                 if (tdsConn.Parser._sessionPool.ActiveSessionsCount > 0)
                                 {
                                     // >1 MARS session 
-                                    if (beforeDisconnect != null)
-                                    {
-                                        beforeDisconnect();
-                                    }
+                                    beforeDisconnect?.Invoke();
                                     OnError(SQL.CR_UnrecoverableClient(ClientConnectionId), true, null);
                                 }
                             }
@@ -686,10 +683,7 @@ namespace System.Data.SqlClient
                                         { // could change since the first check, but now is stable since connection is know to be broken
                                             _originalConnectionId = ClientConnectionId;
                                             _recoverySessionData = cData;
-                                            if (beforeDisconnect != null)
-                                            {
-                                                beforeDisconnect();
-                                            }
+                                            beforeDisconnect?.Invoke();
                                             try
                                             {
                                                 _supressStateChangeForReconnection = true;
@@ -716,10 +710,7 @@ namespace System.Data.SqlClient
                             }
                             else
                             {
-                                if (beforeDisconnect != null)
-                                {
-                                    beforeDisconnect();
-                                }
+                                beforeDisconnect?.Invoke();
                                 OnError(SQL.CR_UnrecoverableServer(ClientConnectionId), true, null);
                             }
                         } // ValidateSNIConnection
@@ -728,10 +719,7 @@ namespace System.Data.SqlClient
             }
             else
             { // runningReconnect = null
-                if (beforeDisconnect != null)
-                {
-                    beforeDisconnect();
-                }
+                beforeDisconnect?.Invoke();
             }
             return runningReconnect;
         }
@@ -1098,10 +1086,6 @@ namespace System.Data.SqlClient
             }
         }
 
-        //
-        // SQL DEBUGGING SUPPORT
-        //
-
         // this only happens once per connection
         // SxS: using named file mapping APIs
 
@@ -1114,7 +1098,6 @@ namespace System.Data.SqlClient
                 return task;
             }, TaskScheduler.Default).Unwrap();
         }
-
 
         public void ResetStatistics()
         {
@@ -1152,6 +1135,16 @@ namespace System.Data.SqlClient
             // delegate the rest of the work to the SqlStatistics class
             Statistics.UpdateStatistics();
         }
+
+#if DEBUG
+        /// <summary>
+        /// TEST ONLY: Kills the underlying connection (without any checks)
+        /// </summary>
+        public void KillConnection()
+        {
+            GetOpenTdsConnection().Parser._physicalStateObj.Handle.KillConnection();
+        }
+#endif
     } // SqlConnection
 } // System.Data.SqlClient namespace
 

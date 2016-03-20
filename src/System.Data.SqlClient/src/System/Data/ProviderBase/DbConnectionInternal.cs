@@ -536,7 +536,7 @@ namespace System.Data.ProviderBase
         /// <param name="throwOnException">If true an exception will be thrown if the connection is dead instead of returning true\false
         /// (this allows the caller to have the real reason that the connection is not alive (e.g. network error, etc))</param>
         /// <returns>True if the connection is still alive, otherwise false (If not overridden, then always true)</returns>
-        internal virtual bool IsConnectionAlive(bool throwOnException = false)
+        internal virtual bool IsConnectionAlive()
         {
             return true;
         }

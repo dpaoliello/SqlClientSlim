@@ -1,8 +1,6 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-using System.Runtime.InteropServices;
-
 namespace System.Data.SqlClient.SNI
 {
     /// <summary>
@@ -272,16 +270,6 @@ namespace System.Data.SqlClient.SNI
         public void PacketSetData(SNIPacket packet, byte[] data, int length)
         {
             packet.SetData(data, length);
-        }
-
-        /// <summary>
-        /// Check SNI handle connection
-        /// </summary>
-        /// <param name="handle"></param>
-        /// <returns>SNI error status</returns>
-        public SNIError CheckConnection(SNIHandle handle)
-        {
-            return handle.CheckConnection();
         }
     }
 }

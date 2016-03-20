@@ -2375,50 +2375,38 @@ namespace System.Data.SqlClient
         /// NOTE: This is not safe to do on a connection that is currently in use
         /// NOTE: This will mark the connection as broken if it is found to be dead
         /// </summary>
-        /// <param name="throwOnException">If true then an exception will be thrown if the connection is found to be dead, otherwise no exception will be thrown</param>
         /// <returns>True if the connection is still alive, otherwise false</returns>
-        internal bool IsConnectionAlive(bool throwOnException)
+        internal bool IsConnectionAlive()
         {
             Debug.Assert(_parser.Connection == null || _parser.Connection.Pool != null, "Shouldn't be calling IsConnectionAlive on non-pooled connections");
-            bool isAlive = true;
-
+            bool isAlive;
             if (DateTime.UtcNow.Ticks - _lastSuccessfulIOTimer._value > CheckConnectionWindow)
             {
                 if ((_parser == null) || ((_parser.State == TdsParserState.Broken) || (_parser.State == TdsParserState.Closed)))
                 {
                     isAlive = false;
-                    if (throwOnException)
-                    {
-                        throw SQL.ConnectionDoomed();
-                    }
                 }
                 else if ((_pendingCallbacks > 1) || ((_parser.Connection != null) && (!_parser.Connection.IsInPool)))
                 {
                     // This connection is currently in use, assume that the connection is 'alive'
                     // NOTE: SNICheckConnection is not currently supported for connections that are in use
                     Debug.Assert(true, "Call to IsConnectionAlive while connection is in use");
+                    isAlive = true;
                 }
                 else
                 {
                     SniContext = SniContext.Snix_Connect;
-                    SNIError error = SNIProxy.Singleton.CheckConnection(Handle);
+                    isAlive = Handle.CheckConnection();
 
-                    if (error != null)
-                    {
-                        // Connection is dead
-                        isAlive = false;
-                        if (throwOnException)
-                        {
-                            // Get the error from SNI so that we can throw the correct exception
-                            AddError(_parser.ProcessSNIError(this, error));
-                            ThrowExceptionAndWarning();
-                        }
-                    }
-                    else
+                    if (isAlive)
                     {
                         _lastSuccessfulIOTimer._value = DateTime.UtcNow.Ticks;
                     }
                 }
+            }
+            else
+            {
+                isAlive = true;
             }
 
             return isAlive;
@@ -2442,7 +2430,7 @@ namespace System.Data.SqlClient
                 return true;
             }
 
-            SNIError error = null;
+            bool isAlive = false;
             SniContext = SniContext.Snix_Connect;
             try
             {
@@ -2450,14 +2438,14 @@ namespace System.Data.SqlClient
                 SNIHandle handle = Handle;
                 if (handle != null)
                 {
-                    error = SNIProxy.Singleton.CheckConnection(handle);
+                    isAlive = handle.CheckConnection();
                 }
             }
             finally
             {
                 Interlocked.Decrement(ref _readingCount);
             }
-            return (error == null);
+            return isAlive;
         }
 
         // This method should only be called by ReadSni!  If not - it may have problems with timeouts!

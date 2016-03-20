@@ -134,6 +134,49 @@ namespace System.Data.SqlClient.Tests
             }
         }
 
+#if DEBUG
+        /// <summary>
+        /// Verifies that connections are checked/"repaired" when the connection is pulled out of the pool
+        /// </summary>
+        [Fact]
+        public async Task RepairConnectionInPoolTest()
+        {
+            using (var connection = new SqlConnection(Utilities.SqlAuthConnectionString))
+            {
+                // Grab a connection, kill it and put it back in the pool
+                await connection.OpenAsync();
+                Guid connectionId = connection.ClientConnectionId;
+                await Utilities.KillConnection(connection);
+                connection.Close();
+
+                // Grab the connection again, and make sure it's ok
+                await connection.OpenAsync();
+                Assert.NotEqual(connectionId, connection.ClientConnectionId);
+                await RunBasicQueryAsync(connection);
+            }
+        }
+
+        /// <summary>
+        /// Verifies that connections are checked/"repaired" when a command is executed
+        /// </summary>
+        [Fact]
+        public async Task RepairConnectionBeforeExecuteTest()
+        {
+            using (var connection = new SqlConnection(Utilities.SqlAuthConnectionString))
+            {
+                // Grab a connection and kill it
+                await connection.OpenAsync();
+                Guid connectionId = connection.ClientConnectionId;
+                await Utilities.KillConnection(connection);
+
+                // Execute a command on the connection and make sure that it changes
+                Assert.Equal(connectionId, connection.ClientConnectionId);
+                await RunBasicQueryAsync(connection);
+                Assert.NotEqual(connectionId, connection.ClientConnectionId);
+            }
+        }
+#endif
+
         /// <summary>
         /// Runs a basic query (SELECT 1) on the given connection
         /// </summary>

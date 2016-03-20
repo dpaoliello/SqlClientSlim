@@ -464,25 +464,20 @@ namespace System.Data.SqlClient.SNI
         /// </summary>
         /// <param name="handle"></param>
         /// <returns>SNI error status</returns>
-        public override SNIError CheckConnection()
+        public override bool CheckConnection()
         {
             try
             {
-                if (!_socket.Connected || _socket.Poll(0, SelectMode.SelectError))
-                {
-                    return ReportTcpSNIError("Connection was disconnected");
-                }
+                return (_socket.Connected && !_socket.Poll(0, SelectMode.SelectError));
             }
-            catch (SocketException se)
+            catch (SocketException)
             {
-                return ReportTcpSNIError(se.Message);
+                return false;
             }
-            catch (ObjectDisposedException ode)
+            catch (ObjectDisposedException)
             {
-                return ReportTcpSNIError(ode.Message);
+                return false;
             }
-
-            return null;
         }
 
         private SNIError ReportTcpSNIError(uint nativeError, uint sniError, string errorMessage)
@@ -507,6 +502,7 @@ namespace System.Data.SqlClient.SNI
         public override void KillConnection()
         {
             _socket.Shutdown(SocketShutdown.Both);
+            _socket.Disconnect(reuseSocket: false);
         }
 #endif
 

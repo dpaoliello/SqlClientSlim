@@ -111,7 +111,7 @@ namespace System.Data.SqlClient.SNI
         /// </summary>
         /// <param name="handle"></param>
         /// <returns>SNI error status</returns>
-        public SNIError CheckConnection()
+        public bool CheckConnection()
         {
             lock (this)
             {

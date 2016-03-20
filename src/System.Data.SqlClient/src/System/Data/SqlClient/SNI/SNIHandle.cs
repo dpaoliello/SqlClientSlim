@@ -62,7 +62,7 @@ namespace System.Data.SqlClient.SNI
         /// Check connection status
         /// </summary>
         /// <returns>SNI error code</returns>
-        public abstract SNIError CheckConnection();
+        public abstract bool CheckConnection();
 
         /// <summary>
         /// Connection ID

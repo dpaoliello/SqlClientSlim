@@ -457,7 +457,7 @@ namespace System.Data.SqlClient.SNI
         /// </summary>
         /// <param name="handle"></param>
         /// <returns>SNI error status</returns>
-        public override SNIError CheckConnection()
+        public override bool CheckConnection()
         {
             return _connection.CheckConnection();
         }

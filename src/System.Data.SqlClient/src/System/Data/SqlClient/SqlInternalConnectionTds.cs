@@ -517,11 +517,9 @@ namespace System.Data.SqlClient
         }
 
 
-        internal override bool IsConnectionAlive(bool throwOnException)
+        internal override bool IsConnectionAlive()
         {
-            bool isAlive = false;
-            isAlive = _parser._physicalStateObj.IsConnectionAlive(throwOnException);
-            return isAlive;
+            return _parser._physicalStateObj.IsConnectionAlive();
         }
 
         ////////////////////////////////////////////////////////////////////////////////////////
@@ -1629,7 +1627,7 @@ namespace System.Data.SqlClient
 
         internal override bool TryReplaceConnection(DbConnection outerConnection, bool isAsync, DbConnectionFactory connectionFactory, DbConnectionOptions userOptions, ref TaskCompletionSource<DbConnectionInternal> completionSource)
         {
-            return base.TryOpenConnection(outerConnection, connectionFactory, isAsync: isAsync, userOptions: userOptions, completionSource: ref completionSource);
+            return base.TryOpenConnectionInternal(outerConnection, connectionFactory, isAsync: isAsync, userOptions: userOptions, completionSource: ref completionSource);
         }
     }
 

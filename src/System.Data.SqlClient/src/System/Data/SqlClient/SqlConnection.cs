@@ -29,7 +29,6 @@ namespace System.Data.SqlClient
         private int _connectRetryCount;
 
         // connection resiliency
-        private object _reconnectLock = new object();
         internal Task _currentReconnectionTask;
         private Task _asyncWaitingForReconnection; // current async task waiting for reconnection in non-MARS connections
         private Guid _originalConnectionId = Guid.Empty;
@@ -673,39 +672,43 @@ namespace System.Data.SqlClient
                             cData.AssertUnrecoverableStateCountIsCorrect();
                             if (cData._unrecoverableStatesCount == 0)
                             {
-                                bool callDisconnect = false;
-                                lock (_reconnectLock)
+                                TaskCompletionSource<object> reconnectCompletionSource = new TaskCompletionSource<object>();
+                                runningReconnect = Interlocked.CompareExchange(ref _currentReconnectionTask, reconnectCompletionSource.Task, null);
+                                if (runningReconnect == null)
                                 {
-                                    runningReconnect = _currentReconnectionTask; // double check after obtaining the lock
-                                    if (runningReconnect == null)
-                                    {
-                                        if (cData._unrecoverableStatesCount == 0)
-                                        { // could change since the first check, but now is stable since connection is know to be broken
-                                            _originalConnectionId = ClientConnectionId;
-                                            _recoverySessionData = cData;
-                                            beforeDisconnect?.Invoke();
-                                            try
-                                            {
-                                                _supressStateChangeForReconnection = true;
-                                                tdsConn.DoomThisConnection();
-                                            }
-                                            catch (SqlException)
-                                            {
-                                            }
-                                            runningReconnect = Task.Run(() => ReconnectAsync(timeout));
-                                            // if current reconnect is not null, somebody already started reconnection task - some kind of race condition
-                                            Debug.Assert(_currentReconnectionTask == null, "Duplicate reconnection tasks detected");
-                                            _currentReconnectionTask = runningReconnect;
+                                    if (cData._unrecoverableStatesCount == 0)
+                                    { // could change since the first check, but now is stable since connection is know to be broken
+                                        _originalConnectionId = ClientConnectionId;
+                                        _recoverySessionData = cData;
+                                        beforeDisconnect?.Invoke();
+                                        try
+                                        {
+                                            _supressStateChangeForReconnection = true;
+                                            tdsConn.DoomThisConnection();
                                         }
-                                    }
-                                    else
-                                    {
-                                        callDisconnect = true;
+                                        catch (SqlException)
+                                        {
+                                        }
+                                        Task.Run(() => ReconnectAsync(timeout).ContinueWith(t => {
+                                            if (t.IsFaulted)
+                                            {
+                                                reconnectCompletionSource.SetException(t.Exception);
+                                            }
+                                            else if (t.IsCanceled)
+                                            {
+                                                reconnectCompletionSource.SetCanceled();
+                                            }
+                                            else
+                                            {
+                                                reconnectCompletionSource.SetResult(null);
+                                            }
+                                        }));
+                                        runningReconnect = reconnectCompletionSource.Task;
                                     }
                                 }
-                                if (callDisconnect && beforeDisconnect != null)
+                                else
                                 {
-                                    beforeDisconnect();
+                                    beforeDisconnect?.Invoke();
                                 }
                             }
                             else
@@ -714,7 +717,7 @@ namespace System.Data.SqlClient
                                 OnError(SQL.CR_UnrecoverableServer(ClientConnectionId), true, null);
                             }
                         } // ValidateSNIConnection
-                    } // sessionRecoverySupported                  
+                    } // sessionRecoverySupported
                 } // connectRetryCount>0
             }
             else

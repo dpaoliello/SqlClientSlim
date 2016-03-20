@@ -22,13 +22,6 @@ namespace System.Data.SqlClient
         private string _commandText;
         private CommandType _commandType;
         private int _commandTimeout = ADP.DefaultCommandTimeout;
-        private UpdateRowSource _updatedRowSource = UpdateRowSource.Both;
-        private bool _designTimeInvisible;
-
-        // Prepare
-        // Against 7.0 Serve a prepare/unprepare requires an extra roundtrip to the server.
-        //
-        // From 8.0 and above  the preparation can be done as part of the command execution.
 
         private enum EXECTYPE
         {
@@ -56,7 +49,6 @@ namespace System.Data.SqlClient
         private SqlConnection _activeConnection;
         private bool _dirty = false;               // true if the user changes the commandtext or number of parameters after the command is already prepared
         private EXECTYPE _execType = EXECTYPE.UNPREPARED; // by default, assume the user is not sharing a connection so the command has not been prepared
-        private _SqlRPC[] _rpcArrayOf1 = null;                // Used for RPC executes
 
         // cut down on object creation and cache all these
         // cached metadata
@@ -431,12 +423,10 @@ namespace System.Data.SqlClient
         {
             get
             {
-                return !_designTimeInvisible;
+                return true;
             }
             set
-            {
-                _designTimeInvisible = !value;
-            }
+            { }
         }
 
         new public SqlParameterCollection Parameters
@@ -465,22 +455,10 @@ namespace System.Data.SqlClient
         {
             get
             {
-                return _updatedRowSource;
+                return UpdateRowSource.None;
             }
             set
-            {
-                switch (value)
-                {
-                    case UpdateRowSource.None:
-                    case UpdateRowSource.OutputParameters:
-                    case UpdateRowSource.FirstReturnedRecord:
-                    case UpdateRowSource.Both:
-                        _updatedRowSource = value;
-                        break;
-                    default:
-                        throw ADP.InvalidUpdateRowSource(value);
-                }
-            }
+            { }
         }
 
         public event StatementCompletedEventHandler StatementCompleted
@@ -2045,9 +2023,6 @@ namespace System.Data.SqlClient
 
             bool inSchema = (0 != (cmdBehavior & CommandBehavior.SchemaOnly));
 
-            // create a new RPC
-            _SqlRPC rpc = null;
-
             task = null;
 
             string optionSettings = null;
@@ -2094,6 +2069,7 @@ namespace System.Data.SqlClient
                         IsDirty = false;
                     }
 
+                    _SqlRPC rpc;
                     if (_execType == EXECTYPE.PREPARED)
                     {
                         Debug.Assert(this.IsPrepared && (_prepareHandle != -1), "invalid attempt to call sp_execute without a handle!");
@@ -2112,20 +2088,19 @@ namespace System.Data.SqlClient
                     else
                     {
                         Debug.Assert(_execType == EXECTYPE.UNPREPARED, "Invalid execType!");
-                        BuildExecuteSql(cmdBehavior, null, _parameters, ref rpc);
+                        rpc = BuildExecuteSql(cmdBehavior, null, _parameters);
                     }
 
                     // if shiloh, then set NOMETADATA_UNLESSCHANGED flag
                     rpc.options = TdsEnums.RPC_NOMETADATA;
 
-                    Debug.Assert(_rpcArrayOf1[0] == rpc);
-                    writeTask = _stateObj.Parser.TdsExecuteRPC(_rpcArrayOf1, timeout, inSchema, _stateObj, CommandType.StoredProcedure == CommandType, sync: !asyncWrite);
+                    writeTask = _stateObj.Parser.TdsExecuteRPC(rpc, timeout, inSchema, _stateObj, CommandType.StoredProcedure == CommandType, sync: !asyncWrite);
                 }
                 else
                 {
                     Debug.Assert(this.CommandType == System.Data.CommandType.StoredProcedure, "unknown command type!");
 
-                    BuildRPC(inSchema, _parameters, ref rpc);
+                    _SqlRPC rpc = BuildRPC(inSchema, _parameters);
 
                     // if we need to augment the command because a user has changed the command behavior (e.g. FillSchema)
                     // then batch sql them over.  This is inefficient (3 round trips) but the only way we can get metadata only from
@@ -2146,8 +2121,7 @@ namespace System.Data.SqlClient
 
 
                     // execute sp
-                    Debug.Assert(_rpcArrayOf1[0] == rpc);
-                    writeTask = _stateObj.Parser.TdsExecuteRPC(_rpcArrayOf1, timeout, inSchema, _stateObj, CommandType.StoredProcedure == CommandType, sync: !asyncWrite);
+                    writeTask = _stateObj.Parser.TdsExecuteRPC(rpc, timeout, inSchema, _stateObj, CommandType.StoredProcedure == CommandType, sync: !asyncWrite);
                 }
 
                 Debug.Assert(writeTask == null || async, "Returned task in sync mode");
@@ -2595,45 +2569,6 @@ namespace System.Data.SqlClient
                 return null;
         }
 
-        private void GetRPCObject(int paramCount, ref _SqlRPC rpc)
-        {
-            // Designed to minimize necessary allocations
-            int ii;
-            if (rpc == null)
-            {
-                if (_rpcArrayOf1 == null)
-                {
-                    _rpcArrayOf1 = new _SqlRPC[1];
-                    _rpcArrayOf1[0] = new _SqlRPC();
-                }
-                rpc = _rpcArrayOf1[0];
-            }
-
-            rpc.ProcID = 0;
-            rpc.rpcName = null;
-            rpc.options = 0;
-
-
-            // Make sure there is enough space in the parameters and paramoptions arrays
-            if (rpc.parameters == null || rpc.parameters.Length < paramCount)
-            {
-                rpc.parameters = new SqlParameter[paramCount];
-            }
-            else if (rpc.parameters.Length > paramCount)
-            {
-                rpc.parameters[paramCount] = null;    // Terminator
-            }
-            if (rpc.paramoptions == null || (rpc.paramoptions.Length < paramCount))
-            {
-                rpc.paramoptions = new byte[paramCount];
-            }
-            else
-            {
-                for (ii = 0; ii < paramCount; ii++)
-                    rpc.paramoptions[ii] = 0;
-            }
-        }
-
         private void SetUpRPCParameters(_SqlRPC rpc, int startCount, bool inSchema, SqlParameterCollection parameters)
         {
             int ii;
@@ -2690,11 +2625,10 @@ namespace System.Data.SqlClient
 
             int count = CountSendableParameters(_parameters);
 
-            _SqlRPC rpc = null;
-            GetRPCObject(count + j, ref rpc);
-
-            rpc.ProcID = TdsEnums.RPC_PROCID_PREPEXEC;
-            rpc.rpcName = TdsEnums.SP_PREPEXEC;
+            _SqlRPC rpc = new _SqlRPC(count + j) {
+                ProcID = TdsEnums.RPC_PROCID_PREPEXEC,
+                rpcName = TdsEnums.SP_PREPEXEC
+            };
 
             //@handle
             sqlParam = new SqlParameter(null, SqlDbType.Int);
@@ -2767,15 +2701,15 @@ namespace System.Data.SqlClient
         //
         // build the RPC record header for this stored proc and add parameters
         //
-        private void BuildRPC(bool inSchema, SqlParameterCollection parameters, ref _SqlRPC rpc)
+        private _SqlRPC BuildRPC(bool inSchema, SqlParameterCollection parameters)
         {
             Debug.Assert(this.CommandType == System.Data.CommandType.StoredProcedure, "Command must be a stored proc to execute an RPC");
             int count = CountSendableParameters(parameters);
-            GetRPCObject(count, ref rpc);
-
-            rpc.rpcName = this.CommandText; // just get the raw command text
-
+            _SqlRPC rpc = new _SqlRPC(count) {
+                rpcName = this.CommandText // just get the raw command text
+            };
             SetUpRPCParameters(rpc, 0, inSchema, parameters);
+            return rpc;
         }
 
         //
@@ -2796,16 +2730,13 @@ namespace System.Data.SqlClient
 
             int count = CountSendableParameters(_parameters);
 
-            _SqlRPC rpc = null;
-            GetRPCObject(count + j, ref rpc);
-
-            SqlParameter sqlParam;
-
-            rpc.ProcID = TdsEnums.RPC_PROCID_EXECUTE;
-            rpc.rpcName = TdsEnums.SP_EXECUTE;
+            _SqlRPC rpc = new _SqlRPC(count + j) {
+                ProcID = TdsEnums.RPC_PROCID_EXECUTE,
+                rpcName = TdsEnums.SP_EXECUTE
+            };
 
             //@handle
-            sqlParam = new SqlParameter(null, SqlDbType.Int);
+            SqlParameter sqlParam = new SqlParameter(null, SqlDbType.Int);
             sqlParam.Value = _prepareHandle;
             rpc.parameters[0] = sqlParam;
 
@@ -2818,7 +2749,7 @@ namespace System.Data.SqlClient
         //
         // prototype for sp_executesql is:
         // sp_executesql(@batch_text nvarchar(4000),@batch_params nvarchar(4000), param1,.. paramN)
-        private void BuildExecuteSql(CommandBehavior behavior, string commandText, SqlParameterCollection parameters, ref _SqlRPC rpc)
+        private _SqlRPC BuildExecuteSql(CommandBehavior behavior, string commandText, SqlParameterCollection parameters)
         {
             Debug.Assert(_prepareHandle == -1, "This command has an existing handle, use sp_execute!");
             Debug.Assert(System.Data.CommandType.Text == this.CommandType, "invalid use of sp_executesql for stored proc invocation!");
@@ -2835,9 +2766,10 @@ namespace System.Data.SqlClient
                 j = 1;
             }
 
-            GetRPCObject(cParams + j, ref rpc);
-            rpc.ProcID = TdsEnums.RPC_PROCID_EXECUTESQL;
-            rpc.rpcName = TdsEnums.SP_EXECUTESQL;
+            _SqlRPC rpc = new _SqlRPC(cParams + j) {
+                ProcID = TdsEnums.RPC_PROCID_EXECUTESQL,
+                rpcName = TdsEnums.SP_EXECUTESQL
+            };
 
             // @sql
             if (commandText == null)
@@ -2858,6 +2790,7 @@ namespace System.Data.SqlClient
                 bool inSchema = (0 != (behavior & CommandBehavior.SchemaOnly));
                 SetUpRPCParameters(rpc, j, inSchema, parameters);
             }
+            return rpc;
         }
 
         // paramList parameter for sp_executesql, sp_prepare, and sp_prepexec

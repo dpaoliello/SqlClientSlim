@@ -18,6 +18,7 @@
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="SqlCommandTests.cs" />
     <Compile Include="SqlConnectionStringBuilderTests.cs" />
     <Compile Include="SqlConnectionTests.cs" />
     <Compile Include="SqlDataReaderTests.cs" />

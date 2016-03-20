@@ -471,13 +471,19 @@ namespace System.Data.SqlClient
         }
     }
 
-    sealed internal class _SqlRPC
+    internal sealed class _SqlRPC
     {
         internal string rpcName;
         internal ushort ProcID;       // Used instead of name
         internal ushort options;
-        internal SqlParameter[] parameters;
-        internal byte[] paramoptions;
+        internal readonly SqlParameter[] parameters;
+        internal readonly byte[] paramoptions;
+
+        public _SqlRPC(int parameterCount)
+        {
+            parameters = new SqlParameter[parameterCount];
+            paramoptions = new byte[parameterCount];
+        }
     }
 
     sealed internal class SqlReturnValue : SqlMetaDataPriv

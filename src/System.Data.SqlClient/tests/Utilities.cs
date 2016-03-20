@@ -11,6 +11,7 @@ namespace System.Data.SqlClient.Tests
 
         private static readonly MethodInfo KillConnectionMethod = typeof(SqlConnection).GetMethod("KillConnection", BindingFlags.NonPublic);
 
+#if DEBUG
         public static Task KillConnection(SqlConnection connection)
         {
             //TODO: Use reflection instead of a public API
@@ -21,5 +22,6 @@ namespace System.Data.SqlClient.Tests
             // so we need to add in a slight delay to ensure that the connection is rechecked.
             return Task.Delay(TimeSpan.FromMilliseconds(100));
         }
+#endif
     }
 }

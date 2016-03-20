@@ -12,6 +12,8 @@ namespace System.Data.SqlClient
 {
     public sealed partial class SqlConnection : DbConnection
     {
+        private static readonly Task s_connectionClosedTask = Task.FromException(ADP.ClosedConnectionError());
+
         private bool _AsyncCommandInProgress;
 
         // SQLStatistics support
@@ -482,7 +484,7 @@ namespace System.Data.SqlClient
             {
                 statistics = SqlStatistics.StartTimer(Statistics);
 
-                Task reconnectTask = _currentReconnectionTask;
+                Task reconnectTask = Interlocked.Exchange(ref _currentReconnectionTask, s_connectionClosedTask);
                 if (reconnectTask != null && !reconnectTask.IsCompleted)
                 {
                     CancellationTokenSource cts = _reconnectionCancellationSource;
@@ -657,18 +659,16 @@ namespace System.Data.SqlClient
                     SqlInternalConnectionTds tdsConn = GetOpenTdsConnection();
                     if (tdsConn._sessionRecoveryAcknowledged)
                     {
-                        TdsParserStateObject stateObj = tdsConn.Parser._physicalStateObj;
-                        if (!stateObj.ValidateSNIConnection())
+                        TdsParser tdsParser = tdsConn.Parser;
+                        if (!tdsParser._physicalStateObj.ValidateSNIConnection())
                         {
-                            if (tdsConn.Parser._sessionPool != null)
+                            if ((tdsParser._sessionPool != null) && (tdsParser._sessionPool.ActiveSessionsCount > 0))
                             {
-                                if (tdsConn.Parser._sessionPool.ActiveSessionsCount > 0)
-                                {
-                                    // >1 MARS session 
-                                    beforeDisconnect?.Invoke();
-                                    OnError(SQL.CR_UnrecoverableClient(ClientConnectionId), true, null);
-                                }
+                                // >1 MARS session
+                                beforeDisconnect?.Invoke();
+                                OnError(SQL.CR_UnrecoverableClient(ClientConnectionId), true, null);
                             }
+
                             SessionData cData = tdsConn.CurrentSessionData;
                             cData.AssertUnrecoverableStateCountIsCorrect();
                             if (cData._unrecoverableStatesCount == 0)
@@ -849,6 +849,11 @@ namespace System.Data.SqlClient
 
         private bool TryOpen(bool isAsync, ref TaskCompletionSource<DbConnectionInternal> completionSource)
         {
+            if (_currentReconnectionTask == s_connectionClosedTask)
+            {
+                _currentReconnectionTask = null;
+            }
+
             if (ForceNewConnection)
             {
                 if (!InnerConnection.TryReplaceConnection(this, isAsync, ConnectionFactory, UserConnectionOptions, ref completionSource))

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Data.SqlClient;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -16,9 +17,15 @@ namespace StressTest
         /// <summary>
         /// Runs one or more tests using the given command
         /// </summary>
-        public static async Task RunAsync(SqlCommand command, CancellationToken cancellationToken)
+        public static async Task RunAsync(SqlCommand command, ConnectionManager connectionManager, CancellationToken cancellationToken)
         {
             command.CommandText = "SELECT 1";
+
+            if (RandomHelper.NextBoolWithProbability(1))
+            {
+                // 1%: Kill the connection
+                connectionManager.KillConnection();
+            }
 
             if (RandomHelper.NextBoolWithProbability(10))
             {
@@ -32,12 +39,12 @@ namespace StressTest
             if (RandomHelper.NextBoolWithProbability(50))
             {
                 // 50%: ExecuteNonQuery
-                await TryExecuteNonQueryAsync(command, cancellationToken);
+                await TryExecuteNonQueryAsync(command, connectionManager, cancellationToken);
             }
             else
             {
                 // 50%: ExecuteReader
-                var dataReaderResult = await TryExecuteReaderAsync(command, cancellationToken);
+                var dataReaderResult = await TryExecuteReaderAsync(command, connectionManager, cancellationToken);
 
                 // TODO: data reader
                 if (dataReaderResult.WasSuccessful)
@@ -48,10 +55,6 @@ namespace StressTest
                         // 95%: Close the reader
                         dataReader.Close();
                     }
-                }
-                else
-                {
-                    
                 }
             }
 
@@ -66,24 +69,24 @@ namespace StressTest
         /// Attempts to run ExecuteNonQuery on a command, handling expected exceptions
         /// </summary>
         /// <returns>The number of rows affects if successful, otherwise null</returns>
-        private static Task<ExecutionResult<int>> TryExecuteNonQueryAsync(SqlCommand command, CancellationToken cancellationToken)
+        private static Task<ExecutionResult<int>> TryExecuteNonQueryAsync(SqlCommand command, ConnectionManager connectionManager, CancellationToken cancellationToken)
         {
-            return TryExecuteAsync(command, cancellationToken, s_executeNonQueryAsync);
+            return TryExecuteAsync(command, connectionManager, cancellationToken, s_executeNonQueryAsync);
         }
 
         /// <summary>
         /// Attempts to run ExecuteNonQuery on a command, handling expected exceptions
         /// </summary>
         /// <returns>A SqlDataReader if successful, otherwise null</returns>
-        private static Task<ExecutionResult<SqlDataReader>> TryExecuteReaderAsync(SqlCommand command, CancellationToken cancellationToken)
+        private static Task<ExecutionResult<SqlDataReader>> TryExecuteReaderAsync(SqlCommand command, ConnectionManager connectionManager, CancellationToken cancellationToken)
         {
-            return TryExecuteAsync(command, cancellationToken, s_executeReaderAsync);
+            return TryExecuteAsync(command, connectionManager, cancellationToken, s_executeReaderAsync);
         }
 
         /// <summary>
         /// Attempts to execute a command using the given execution function, catching known exceptions
         /// </summary>
-        private static async Task<ExecutionResult<T>> TryExecuteAsync<T>(SqlCommand command, CancellationToken cancellationToken, Func<SqlCommand, CancellationToken, Task<T>> executeFunc)
+        private static async Task<ExecutionResult<T>> TryExecuteAsync<T>(SqlCommand command, ConnectionManager connectionManager, CancellationToken cancellationToken, Func<SqlCommand, CancellationToken, Task<T>> executeFunc)
         {
             try
             {
@@ -104,6 +107,34 @@ namespace StressTest
             catch (InvalidOperationException ex) when (cancellationToken.IsCancellationRequested && (ex.Message == "Operation cancelled by user."))
             {
                 // Operation cancelled by user.
+            }
+            catch (SqlException ex) when (!connectionManager.IsConnectionAlive &&
+                (ex.Message.EndsWith("(provider: SNI_PN7, error: 0 - Unable to write data to the transport connection: A request to send or receive data was disallowed because the socket had already been shut down in that direction with a previous shutdown call.)") ||
+                ex.Message.EndsWith("(provider: SNI_PN7, error: 0 - Unable to write data to the transport connection: An established connection was aborted by the software in your host machine.)") ||
+                ex.Message.EndsWith("(provider: SNI_PN7, error: 0 - Unable to read data from the transport connection: A request to send or receive data was disallowed because the socket had already been shut down in that direction with a previous shutdown call.)") ||
+                ex.Message.EndsWith("(provider: SNI_PN7, error: 0 - Unable to read data from the transport connection: An established connection was aborted by the software in your host machine.)") ||
+                ex.Message.EndsWith("(provider: SNI_PN7, error: 0 - Connection was terminated)") ||
+                (ex.Message == "The connection is broken and recovery is not possible.  The connection is marked by the client driver as unrecoverable.  No attempt was made to restore the connection") ||
+                ((connectionManager.IsMarsEnabled) && (ex.Message == "The connection is broken and recovery is not possible.  The connection is marked by the client driver as unrecoverable.  No attempt was made to restore the connection."))))
+            {
+                // Connection was killed
+            }
+            catch (InvalidOperationException ex) when (!connectionManager.IsConnectionAlive && connectionManager.IsMarsEnabled &&
+                (ex.Message.Contains("requires an open and available Connection. The connection's current state") ||
+                (ex.Message == "Invalid operation. The connection is closed.") ||
+                (ex.Message == "The requested operation cannot be completed because the connection has been broken.")))
+            {
+                // MARS: Connection was killed on another thread
+            }
+            catch (SqlException ex) when (ex.Message == "Timeout expired.  The timeout period elapsed prior to completion of the operation or the server is not responding.")
+            {
+                // Timeout
+            }
+            catch (Exception ex)
+            {
+                // Unknown error
+                Debug.Assert(false, $"Unknown error: {ex.Message}");
+                throw;
             }
 
             // Fallthrough: known exception happened

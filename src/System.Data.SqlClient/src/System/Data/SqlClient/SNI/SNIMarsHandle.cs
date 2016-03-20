@@ -304,13 +304,24 @@ namespace System.Data.SqlClient.SNI
         /// </summary>
         public void HandleReceiveError(SNIPacket packet, SNIError sniError)
         {
+            int callbacksPending;
             lock (_receivedPacketQueue)
             {
+                Debug.Assert(_connectionError == null, "Already have a stored connection error");
                 _connectionError = sniError;
+
+                // Wake any pending sync receives
                 _packetEvent.Set();
+
+                callbacksPending = _asyncReceives;
+                _asyncReceives = 0;
             }
 
-            _callbackObject.ReadAsyncCallback(packet, _connectionError);
+            // Callback to any pending async receives
+            for (int i = 0; i < _asyncReceives; i++)
+            {
+                _callbackObject.ReadAsyncCallback(packet, _connectionError);
+            }
         }
 
         /// <summary>
@@ -358,16 +369,20 @@ namespace System.Data.SqlClient.SNI
 
                 lock (_receivedPacketQueue)
                 {
-                    if (_asyncReceives == 0)
+                    // The error callback takes care of completing all pending receives
+                    if (_connectionError == null)
                     {
-                        _receivedPacketQueue.Enqueue(packet);
-                        _packetEvent.Set();
-                        return;
+                        if (_asyncReceives == 0)
+                        {
+                            _receivedPacketQueue.Enqueue(packet);
+                            _packetEvent.Set();
+                            return;
+                        }
+
+                        _asyncReceives--;
+
+                        _callbackObject.ReadAsyncCallback(packet, null);
                     }
-
-                    _asyncReceives--;
-
-                    _callbackObject.ReadAsyncCallback(packet, null);
                 }
             }
 

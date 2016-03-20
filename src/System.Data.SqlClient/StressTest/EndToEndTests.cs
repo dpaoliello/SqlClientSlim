@@ -12,7 +12,7 @@ namespace StressTest
         private const string NonPooledFragment = "pooling=false;";
         private const string MarsFragment = "multipleactiveresultsets=true";
 
-        private const string SqlAuthConnectionString = "server=localhost;user id=sa;password=452g34f23t4324t2g43t;";
+        private const string SqlAuthConnectionString = "server=localhost;user id=sa;password=452g34f23t4324t2g43t;max pool size=1000;";
         private const string SqlAuthNonPooledConnectionString = SqlAuthConnectionString + NonPooledFragment;
 
         /// <summary>
@@ -30,7 +30,7 @@ namespace StressTest
             {
                 if (await TryOpenConnectionAsync(connection, cancellationToken))
                 {
-                    await CommandTests.RunAsync(connection.CreateCommand(), cancellationToken);
+                    await CommandTests.RunAsync(connection.CreateCommand(), new ConnectionManager(connection, isMarsEnabled: false), cancellationToken);
                 }
             }
             finally
@@ -53,10 +53,11 @@ namespace StressTest
             {
                 if (await TryOpenConnectionAsync(connection, cancellationToken))
                 {
+                    ConnectionManager connectionManager = new ConnectionManager(connection, isMarsEnabled: true);
                     Task[] executionTasks = new Task[RandomHelper.Next(0, 8) * RandomHelper.Next(1, 8)];
                     for (int i = 0; i < executionTasks.Length; i++)
                     {
-                        executionTasks[i] = CommandTests.RunAsync(connection.CreateCommand(), cancellationToken);
+                        executionTasks[i] = Task.Run(() => CommandTests.RunAsync(connection.CreateCommand(), connectionManager, cancellationToken));
                     }
                     await Task.WhenAll(executionTasks);
                 }

@@ -109,6 +109,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="CommandTests.cs" />
+    <Compile Include="ConnectionManager.cs" />
     <Compile Include="DebugTraceListener.cs" />
     <Compile Include="EndToEndTests.cs" />
     <Compile Include="Engine.cs" />

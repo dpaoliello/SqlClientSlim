@@ -480,8 +480,18 @@ namespace System.Data.SqlClient
 
             if (MARSOn)
             {
-                // This will take care of disposing if the parser is closed
-                _sessionPool.PutSession(session);
+                // We have to take the lock before putting back the session as it may write to the underlying
+                // handle if the session needs to be closed.
+                _connHandler._parserLock.Wait(canReleaseFromAnyThread: false);
+                try
+                {
+                    // This will take care of disposing if the parser is closed
+                    _sessionPool.PutSession(session);
+                }
+                finally
+                {
+                    _connHandler._parserLock.Release();
+                }
             }
             else if ((_state == TdsParserState.Closed) || (_state == TdsParserState.Broken))
             {

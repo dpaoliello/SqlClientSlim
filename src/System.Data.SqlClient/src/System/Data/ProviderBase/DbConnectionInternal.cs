@@ -419,6 +419,7 @@ namespace System.Data.ProviderBase
 
         internal virtual bool TryReplaceConnection(DbConnection outerConnection, bool isAsync, DbConnectionFactory connectionFactory, DbConnectionOptions userOptions, ref TaskCompletionSource<DbConnectionInternal> completionSource)
         {
+            Debug.Assert(false, "DbConnectionInternal.TryReplaceConnection should never be called");
             throw ADP.MethodNotImplemented("TryReplaceConnection");
         }
 

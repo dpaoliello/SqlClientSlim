@@ -712,9 +712,6 @@ namespace System.Data.SqlClient
         internal void CloseSession()
         {
             ResetCancelAndProcessAttention();
-#if DEBUG
-            InvalidateDebugOnlyCopyOfSniContext();
-#endif
             Parser.PutSession(this);
         }
 
@@ -769,6 +766,9 @@ namespace System.Data.SqlClient
                         DecrementOpenResultCount();
                     }
 
+#if DEBUG
+                    InvalidateDebugOnlyCopyOfSniContext();
+#endif
                     ResetCancelAndProcessAttention();
                     goodForReuse = true;
                 }

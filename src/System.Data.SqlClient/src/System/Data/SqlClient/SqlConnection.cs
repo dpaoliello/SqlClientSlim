@@ -151,7 +151,7 @@ namespace System.Data.SqlClient
             }
             set
             {
-                ConnectionString_Set(new SqlConnectionPoolKey(value));
+                ConnectionString_Set(new DbConnectionPoolKey(value));
                 _connectionString = value;  // Change _connectionString value only after value is validated
                 CacheConnectionStringProperties();
             }

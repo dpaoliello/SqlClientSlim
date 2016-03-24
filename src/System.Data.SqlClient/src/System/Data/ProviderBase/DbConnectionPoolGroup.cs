@@ -6,6 +6,7 @@
 
 using System.Collections.Concurrent;
 using System.Data.Common;
+using System.Data.SqlClient;
 using System.Diagnostics;
 
 namespace System.Data.ProviderBase
@@ -175,7 +176,7 @@ namespace System.Data.ProviderBase
                 {
                     if (!_poolCollection.TryGetValue(currentIdentity, out pool))
                     { // find the pool
-                        DbConnectionPoolProviderInfo connectionPoolProviderInfo = connectionFactory.CreateConnectionPoolProviderInfo(this.ConnectionOptions);
+                        SqlConnectionPoolProviderInfo connectionPoolProviderInfo = new SqlConnectionPoolProviderInfo();
 
                         // optimistically create pool, but its callbacks are delayed until after actual add
                         DbConnectionPool newPool = new DbConnectionPool(connectionFactory, this, currentIdentity, connectionPoolProviderInfo);

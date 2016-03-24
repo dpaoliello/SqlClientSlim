@@ -35,7 +35,6 @@ namespace System.Data.SqlClient
         override protected DbConnectionInternal CreateConnection(DbConnectionOptions options, DbConnectionPoolKey poolKey, object poolGroupProviderInfo, DbConnectionPool pool, DbConnection owningConnection, DbConnectionOptions userOptions)
         {
             SqlConnectionString opt = (SqlConnectionString)options;
-            SqlConnectionPoolKey key = (SqlConnectionPoolKey)poolKey;
             SqlInternalConnection result = null;
             SessionData recoverySessionData = null;
 
@@ -138,18 +137,6 @@ namespace System.Data.SqlClient
             return result;
         }
 
-        override internal DbConnectionPoolProviderInfo CreateConnectionPoolProviderInfo(DbConnectionOptions connectionOptions)
-        {
-            DbConnectionPoolProviderInfo providerInfo = null;
-
-            if (((SqlConnectionString)connectionOptions).UserInstance)
-            {
-                providerInfo = new SqlConnectionPoolProviderInfo();
-            }
-
-            return providerInfo;
-        }
-
         override protected DbConnectionPoolGroupOptions CreateConnectionPoolGroupOptions(DbConnectionOptions connectionOptions)
         {
             SqlConnectionString opt = (SqlConnectionString)connectionOptions;
@@ -183,7 +170,7 @@ namespace System.Data.SqlClient
         }
 
 
-        internal static SqlConnectionString FindSqlConnectionOptions(SqlConnectionPoolKey key)
+        internal static SqlConnectionString FindSqlConnectionOptions(DbConnectionPoolKey key)
         {
             SqlConnectionString connectionOptions = (SqlConnectionString)SingletonInstance.FindConnectionOptions(key);
             if (null == connectionOptions)

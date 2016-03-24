@@ -15,7 +15,7 @@ namespace Microsoft.SqlServer.Server
     // environment available to a particular protocol level (such as storing data 
     // in native structures for in-proc data access).  Includes methods to send 
     // the record to a context pipe (useful for in-proc scenarios).
-    internal abstract class SmiRecordBuffer : SmiTypedGetterSetter, ITypedGettersV3, ITypedSettersV3, ITypedGetters, ITypedSetters, IDisposable
+    internal abstract class SmiRecordBuffer : SmiTypedGetterSetter, ITypedGettersV3, ITypedSettersV3, IDisposable
     {
         #region SMI active methods as of V200
 

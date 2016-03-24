@@ -11,6 +11,7 @@ using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Collections.Concurrent;
+using System.Data.SqlClient;
 
 namespace System.Data.ProviderBase
 {
@@ -93,7 +94,7 @@ namespace System.Data.ProviderBase
         private readonly DbConnectionFactory _connectionFactory;
         private readonly DbConnectionPoolGroup _connectionPoolGroup;
         private readonly DbConnectionPoolGroupOptions _connectionPoolGroupOptions;
-        private DbConnectionPoolProviderInfo _connectionPoolProviderInfo;
+        private SqlConnectionPoolProviderInfo _connectionPoolProviderInfo;
 
         private State _state;
 
@@ -118,7 +119,7 @@ namespace System.Data.ProviderBase
                             DbConnectionFactory connectionFactory,
                             DbConnectionPoolGroup connectionPoolGroup,
                             DbConnectionPoolIdentity identity,
-                            DbConnectionPoolProviderInfo connectionPoolProviderInfo)
+                            SqlConnectionPoolProviderInfo connectionPoolProviderInfo)
         {
             Debug.Assert(null != connectionPoolGroup, "null connectionPoolGroup");
 
@@ -225,7 +226,7 @@ namespace System.Data.ProviderBase
             get { return _connectionPoolGroupOptions; }
         }
 
-        internal DbConnectionPoolProviderInfo ProviderInfo
+        internal SqlConnectionPoolProviderInfo ProviderInfo
         {
             get { return _connectionPoolProviderInfo; }
         }

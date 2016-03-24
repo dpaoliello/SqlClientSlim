@@ -5,13 +5,11 @@
 
 //------------------------------------------------------------------------------
 
-using System.Diagnostics;
-
 namespace System.Data.Common
 {
     // DbConnectionPoolKey: Base class implementation of a key to connection pool groups
     //  Only connection string is used as a key
-    internal class DbConnectionPoolKey
+    internal struct DbConnectionPoolKey : IEquatable<DbConnectionPoolKey>
     {
         private string _connectionString;
 
@@ -20,17 +18,7 @@ namespace System.Data.Common
             _connectionString = connectionString;
         }
 
-        protected DbConnectionPoolKey(DbConnectionPoolKey key)
-        {
-            _connectionString = key.ConnectionString;
-        }
-
-        internal virtual DbConnectionPoolKey Clone()
-        {
-            return new DbConnectionPoolKey(this);
-        }
-
-        internal virtual string ConnectionString
+        internal string ConnectionString
         {
             get
             {
@@ -43,12 +31,15 @@ namespace System.Data.Common
             }
         }
 
+        public bool Equals(DbConnectionPoolKey other)
+        {
+            return object.ReferenceEquals(_connectionString, other._connectionString) ||
+                (_connectionString == other._connectionString);
+        }
+
         public override bool Equals(object obj)
         {
-            DbConnectionPoolKey key = obj as DbConnectionPoolKey;
-            Debug.Assert(obj.GetType() == typeof(DbConnectionPoolKey), "Derived classes should not be using DbConnectionPoolKey.Equals");
-
-            return (key != null && _connectionString == key._connectionString);
+            return (obj is DbConnectionPoolKey && Equals((DbConnectionPoolKey)obj));
         }
 
         public override int GetHashCode()

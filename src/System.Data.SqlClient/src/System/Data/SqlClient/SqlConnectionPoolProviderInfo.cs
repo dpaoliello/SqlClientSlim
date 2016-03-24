@@ -4,11 +4,9 @@
 
 //------------------------------------------------------------------------------
 
-using System.Data.ProviderBase;
-
 namespace System.Data.SqlClient
 {
-    internal sealed class SqlConnectionPoolProviderInfo : DbConnectionPoolProviderInfo
+    internal struct SqlConnectionPoolProviderInfo
     {
         private string _instanceName;
 

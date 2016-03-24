@@ -10,6 +10,7 @@ using System.Diagnostics;
 using System.Data.Common;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Data.SqlClient;
 
 namespace System.Data.ProviderBase
 {
@@ -71,7 +72,6 @@ namespace System.Data.ProviderBase
 
         public void ClearPool(DbConnectionPoolKey key)
         {
-            Debug.Assert(key != null, "key cannot be null");
             ADP.CheckArgumentNull(key.ConnectionString, "key.ConnectionString");
 
             DbConnectionPoolGroup poolGroup;
@@ -82,9 +82,9 @@ namespace System.Data.ProviderBase
             }
         }
 
-        internal virtual DbConnectionPoolProviderInfo CreateConnectionPoolProviderInfo(DbConnectionOptions connectionOptions)
+        internal virtual SqlConnectionPoolProviderInfo CreateConnectionPoolProviderInfo(DbConnectionOptions connectionOptions)
         {
-            return null;
+            return new SqlConnectionPoolProviderInfo();
         }
 
 
@@ -131,7 +131,6 @@ namespace System.Data.ProviderBase
 
         protected DbConnectionOptions FindConnectionOptions(DbConnectionPoolKey key)
         {
-            Debug.Assert(key != null, "key cannot be null");
             if (!ADP.IsEmpty(key.ConnectionString))
             {
                 DbConnectionPoolGroup connectionPoolGroup;

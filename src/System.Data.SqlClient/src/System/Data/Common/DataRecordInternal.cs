@@ -26,12 +26,6 @@ namespace System.Data.Common
             _fieldNameLookup = fieldNameLookup;
         }
 
-        internal void SetSchemaInfo(SchemaInfo[] schemaInfo)
-        {
-            Debug.Assert(null == _schemaInfo, "invalid attempt to override DataRecordInternal schema information");
-            _schemaInfo = schemaInfo;
-        }
-
         public override int FieldCount
         {
             get

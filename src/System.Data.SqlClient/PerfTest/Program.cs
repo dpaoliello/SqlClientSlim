@@ -10,6 +10,7 @@ namespace PerfTest
 
             RunSlimAndFull(perfEngine, SqlClientSlimTests.OpenPooledConnectionTest, SqlClientFullTests.OpenPooledConnectionTest, "CreateConnectionTest", TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(15));
             RunSlimAndFull(perfEngine, SqlClientSlimTests.SelectParametersTest, SqlClientFullTests.SelectParametersTest, "SelectParametersTest", TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(15));
+            RunSlimAndFull(perfEngine, SqlClientSlimTests.LargeStreamTest, SqlClientFullTests.LargeStreamTest, "LargeStreamTest", TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(15));
         }
 
         private static void RunSlimAndFull(Engine perfEngine, Action slimTest, Action fullTest, string testName, TimeSpan warmupTime, TimeSpan runningTime)

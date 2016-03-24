@@ -681,7 +681,7 @@ namespace System.Data.SqlClient
             }
 
             // _inBuff should only be 4k at this point, so we eliminate ways for rogue server to provide large buffer resulting in DOS.
-            byte[] payload = new byte[_physicalStateObj._inBytesRead - _physicalStateObj._inBytesUsed - _physicalStateObj._inputHeaderLen];
+            byte[] payload = new byte[_physicalStateObj._inBytesRead - _physicalStateObj._inBytesUsed - TdsEnums.HEADER_LEN];
 
             Debug.Assert(_physicalStateObj._syncOverAsync, "Should not attempt pends in a synchronous call");
             result = _physicalStateObj.TryReadByteArray(payload, 0, payload.Length);
@@ -914,7 +914,7 @@ namespace System.Data.SqlClient
             if (_state != TdsParserState.Closed)
             {
                 //benign assert - the user could close the connection before consuming all the data
-                //Debug.Assert(_physicalStateObj._inBytesUsed == _physicalStateObj._inBytesRead && _physicalStateObj._outBytesUsed == _physicalStateObj._inputHeaderLen, "TDSParser closed with data not fully sent or consumed.");
+                //Debug.Assert(_physicalStateObj._inBytesUsed == _physicalStateObj._inBytesRead && _physicalStateObj._outBytesUsed == TdsEnums.HEADER_LEN, "TDSParser closed with data not fully sent or consumed.");
 
                 _state = TdsParserState.Closed;
 
@@ -1696,10 +1696,6 @@ namespace System.Data.SqlClient
                             if (!TryProcessDone(cmdHandler, dataStream, ref runBehavior, stateObj))
                             {
                                 return false;
-                            }
-                            if ((token == TdsEnums.SQLDONEPROC) && (cmdHandler != null))
-                            {
-                                cmdHandler.OnDoneProc();
                             }
 
                             break;
@@ -2827,7 +2823,7 @@ namespace System.Data.SqlClient
 
             _isKatmai |= _isDenali;
 
-            stateObj._outBytesUsed = stateObj._outputHeaderLen;
+            stateObj._outBytesUsed = TdsEnums.HEADER_LEN;
             byte len;
             if (!stateObj.TryReadByte(out len))
             {
@@ -5259,16 +5255,7 @@ namespace System.Data.SqlClient
         // @devnote: sign should have already been read off the wire
         private bool TryReadDecimalBits(int length, TdsParserStateObject stateObj, out int[] bits)
         {
-            bits = stateObj._decimalBits; // used alloc'd array if we have one already
-            int i;
-
-            if (null == bits)
-                bits = new int[4];
-            else
-            {
-                for (i = 0; i < bits.Length; i++)
-                    bits[i] = 0;
-            }
+            bits = new int[4];
 
             Debug.Assert((length > 0) &&
                          (length <= TdsEnums.MAX_NUMERIC_LEN - 1) &&
@@ -5276,7 +5263,7 @@ namespace System.Data.SqlClient
 
             int decLength = length >> 2;
 
-            for (i = 0; i < decLength; i++)
+            for (int i = 0; i < decLength; i++)
             {
                 // up to 16 bytes of data following the sign byte
                 if (!stateObj.TryReadInt32(out bits[i]))
@@ -5329,8 +5316,8 @@ namespace System.Data.SqlClient
 
         private void WriteDecimal(decimal value, TdsParserStateObject stateObj)
         {
-            stateObj._decimalBits = Decimal.GetBits(value);
-            Debug.Assert(null != stateObj._decimalBits, "decimalBits should be filled in at TdsExecuteRPC time");
+            int[] decimalBits = Decimal.GetBits(value);
+            Debug.Assert(null != decimalBits, "decimalBits should be filled in at TdsExecuteRPC time");
 
             /*
              Returns a binary representation of a Decimal. The return value is an integer
@@ -5352,14 +5339,14 @@ namespace System.Data.SqlClient
             */
 
             // write the sign (note that COM and SQL are opposite)
-            if (0x80000000 == (stateObj._decimalBits[3] & 0x80000000))
+            if (0x80000000 == (decimalBits[3] & 0x80000000))
                 stateObj.WriteByte(0);
             else
                 stateObj.WriteByte(1);
 
-            WriteInt(stateObj._decimalBits[0], stateObj);
-            WriteInt(stateObj._decimalBits[1], stateObj);
-            WriteInt(stateObj._decimalBits[2], stateObj);
+            WriteInt(decimalBits[0], stateObj);
+            WriteInt(decimalBits[1], stateObj);
+            WriteInt(decimalBits[2], stateObj);
             WriteInt(0, stateObj);
         }
 
@@ -6266,7 +6253,7 @@ namespace System.Data.SqlClient
 
                 const int marsHeaderSize = 18; // 4 + 2 + 8 + 4
                 const int totalHeaderLength = 22; // 4 + 4 + 2 + 8 + 4
-                Debug.Assert(stateObj._outBytesUsed == stateObj._outputHeaderLen, "Output bytes written before total header length");
+                Debug.Assert(stateObj._outBytesUsed == TdsEnums.HEADER_LEN, "Output bytes written before total header length");
                 // Write total header length
                 WriteInt(totalHeaderLength, stateObj);
                 // Write mars header length
@@ -7826,7 +7813,7 @@ namespace System.Data.SqlClient
             const int marsHeaderSize = 18; // 4 + 2 + 8 + 4
 
             int totalHeaderLength = 4 + marsHeaderSize;
-            Debug.Assert(stateObj._outBytesUsed == stateObj._outputHeaderLen, "Output bytes written before total header length");
+            Debug.Assert(stateObj._outBytesUsed == TdsEnums.HEADER_LEN, "Output bytes written before total header length");
             // Write total header length
             WriteInt(totalHeaderLength, stateObj);
 

@@ -398,15 +398,6 @@ namespace System.Data.ProviderBase
             _connectionPool = connectionPool;
         }
 
-        internal void NotifyWeakReference(int message)
-        {
-            DbReferenceCollection referenceCollection = ReferenceCollection;
-            if (null != referenceCollection)
-            {
-                referenceCollection.Notify(message);
-            }
-        }
-
         /// <devdoc>The default implementation is for the open connection objects, and
         /// it simply throws.  Our private closed-state connection objects
         /// override this and do the correct thing.</devdoc>

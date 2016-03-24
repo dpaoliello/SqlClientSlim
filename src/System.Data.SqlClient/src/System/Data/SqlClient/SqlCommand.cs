@@ -60,13 +60,6 @@ namespace System.Data.SqlClient
 #if DEBUG
         static internal int DebugForceAsyncWriteDelay { get; set; }
 #endif
-        internal bool InPrepare
-        {
-            get
-            {
-                return _inPrepare;
-            }
-        }
 
         // Cached info for async executions
         private class CachedAsyncState
@@ -188,9 +181,6 @@ namespace System.Data.SqlClient
         // by the stateObject.
         private volatile bool _pendingCancel;
 
-
-
-
         public SqlCommand() : base()
         {
             GC.SuppressFinalize(this);
@@ -277,17 +267,6 @@ namespace System.Data.SqlClient
                 Connection = (SqlConnection)value;
             }
         }
-
-
-        private SqlInternalConnectionTds InternalTdsConnection
-        {
-            get
-            {
-                return (SqlInternalConnectionTds)_activeConnection.InnerConnection;
-            }
-        }
-
-
 
         internal SqlStatistics Statistics
         {
@@ -1729,96 +1708,6 @@ namespace System.Data.SqlClient
             return part;
         }
 
-        // User value in this format: [server].[database].[schema].[sp_foo];1
-        // This function should only be passed "[sp_foo];1".
-        // This function uses a pretty simple parser that doesn't do any validation.
-        // Ideally, we would have support from the server rather than us having to do this.
-        private static string UnquoteProcedureName(string name, out object groupNumber)
-        {
-            groupNumber = null; // Out param - initialize value to no value.
-            string sproc = name;
-
-            if (null != sproc)
-            {
-                if (Char.IsDigit(sproc[sproc.Length - 1]))
-                { // If last char is a digit, parse.
-                    int semicolon = sproc.LastIndexOf(';');
-                    if (semicolon != -1)
-                    { // If we found a semicolon, obtain the integer.
-                        string part = sproc.Substring(semicolon + 1);
-                        int number = 0;
-                        if (Int32.TryParse(part, out number))
-                        { // No checking, just fail if this doesn't work.
-                            groupNumber = number;
-                            sproc = sproc.Substring(0, semicolon);
-                        }
-                    }
-                }
-                sproc = UnquoteProcedurePart(sproc);
-            }
-            return sproc;
-        }
-
-        //index into indirection arrays for columns of interest to DeriveParameters
-        private enum ProcParamsColIndex
-        {
-            ParameterName = 0,
-            ParameterType,
-            DataType,                  // obsolete in katmai, use ManagedDataType instead
-            ManagedDataType,          // new in katmai
-            CharacterMaximumLength,
-            NumericPrecision,
-            NumericScale,
-            TypeCatalogName,
-            TypeSchemaName,
-            TypeName,
-            XmlSchemaCollectionCatalogName,
-            XmlSchemaCollectionSchemaName,
-            XmlSchemaCollectionName,
-            UdtTypeName,                // obsolete in Katmai.  Holds the actual typename if UDT, since TypeName didn't back then.
-            DateTimeScale               // new in Katmai
-        };
-
-        // Yukon- column ordinals (this array indexed by ProcParamsColIndex
-        static readonly internal string[] PreKatmaiProcParamsNames = new string[] {
-            "PARAMETER_NAME",           // ParameterName,
-            "PARAMETER_TYPE",           // ParameterType,
-            "DATA_TYPE",                // DataType
-            null,                       // ManagedDataType,     introduced in Katmai
-            "CHARACTER_MAXIMUM_LENGTH", // CharacterMaximumLength,
-            "NUMERIC_PRECISION",        // NumericPrecision,
-            "NUMERIC_SCALE",            // NumericScale,
-            "UDT_CATALOG",              // TypeCatalogName,
-            "UDT_SCHEMA",               // TypeSchemaName,
-            "TYPE_NAME",                // TypeName,
-            "XML_CATALOGNAME",          // XmlSchemaCollectionCatalogName,
-            "XML_SCHEMANAME",           // XmlSchemaCollectionSchemaName,
-            "XML_SCHEMACOLLECTIONNAME", // XmlSchemaCollectionName
-            "UDT_NAME",                 // UdtTypeName
-            null,                       // Scale for datetime types with scale, introduced in Katmai
-        };
-
-        // Katmai+ column ordinals (this array indexed by ProcParamsColIndex
-        static readonly internal string[] KatmaiProcParamsNames = new string[] {
-            "PARAMETER_NAME",           // ParameterName,
-            "PARAMETER_TYPE",           // ParameterType,
-            null,                       // DataType, removed from Katmai+
-            "MANAGED_DATA_TYPE",        // ManagedDataType,
-            "CHARACTER_MAXIMUM_LENGTH", // CharacterMaximumLength,
-            "NUMERIC_PRECISION",        // NumericPrecision,
-            "NUMERIC_SCALE",            // NumericScale,
-            "TYPE_CATALOG_NAME",        // TypeCatalogName,
-            "TYPE_SCHEMA_NAME",         // TypeSchemaName,
-            "TYPE_NAME",                // TypeName,
-            "XML_CATALOGNAME",          // XmlSchemaCollectionCatalogName,
-            "XML_SCHEMANAME",           // XmlSchemaCollectionSchemaName,
-            "XML_SCHEMACOLLECTIONNAME", // XmlSchemaCollectionName
-            null,                       // UdtTypeName, removed from Katmai+
-            "SS_DATETIME_PRECISION",    // Scale for datetime types with scale
-        };
-
-
-
         // get cached metadata
         internal _SqlMetaDataSet MetaData
         {
@@ -1827,7 +1716,6 @@ namespace System.Data.SqlClient
                 return _cachedMetaData;
             }
         }
-
 
         // Tds-specific logic for ExecuteNonQuery run handling
         private Task RunExecuteNonQueryTds(string methodName, bool async, int timeout, bool asyncWrite)
@@ -2422,10 +2310,6 @@ namespace System.Data.SqlClient
             {
                 stateObj.CloseSession();
             }
-        }
-
-        internal void OnDoneProc()
-        { // called per rpc batch complete
         }
 
         internal void OnReturnStatus(int status)

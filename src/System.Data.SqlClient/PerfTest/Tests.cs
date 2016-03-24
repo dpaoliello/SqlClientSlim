@@ -34,6 +34,35 @@ namespace PerfTest
                 }
             }
         }
+
+        public static void LargeStreamTest()
+        {
+            const int dataSize = 128 * 1024;
+            const int blockSize = 1024;
+
+            using (var connection = new SqlClientSlim::System.Data.SqlClient.SqlConnection(SqlAuthConnectionString))
+            using (var command = new SqlClientSlim::System.Data.SqlClient.SqlCommand("SELECT @data", connection))
+            {
+                var outStream = new MockStream(dataSize);
+                command.Parameters.Add(new SqlClientSlim::System.Data.SqlClient.SqlParameter("data", outStream));
+
+                connection.OpenAsync().Wait();
+                using (var reader = command.ExecuteReaderAsync().Result)
+                {
+                    reader.ReadAsync().Wait();
+
+                    using (var inStream = reader.GetStream(0))
+                    {
+                        int bytesRead;
+                        byte[] data = new byte[blockSize];
+                        do
+                        {
+                            bytesRead = inStream.ReadAsync(data, 0, blockSize).Result;
+                        } while (bytesRead != 0);
+                    }
+                }
+            }
+        }
     }
 
 
@@ -64,6 +93,35 @@ namespace PerfTest
 
                     reader.GetFieldValue<int>(0);
                     reader.GetFieldValue<string>(1);
+                }
+            }
+        }
+
+        public static void LargeStreamTest()
+        {
+            const int dataSize = 128 * 1024;
+            const int blockSize = 1024;
+
+            using (var connection = new SqlClientFull::System.Data.SqlClient.SqlConnection(SqlAuthConnectionString))
+            using (var command = new SqlClientFull::System.Data.SqlClient.SqlCommand("SELECT @data", connection))
+            {
+                var outStream = new MockStream(dataSize);
+                command.Parameters.Add(new SqlClientFull::System.Data.SqlClient.SqlParameter("data", outStream));
+
+                connection.OpenAsync().Wait();
+                using (var reader = command.ExecuteReaderAsync().Result)
+                {
+                    reader.ReadAsync().Wait();
+
+                    using (var inStream = reader.GetStream(0))
+                    {
+                        int bytesRead;
+                        byte[] data = new byte[blockSize];
+                        do
+                        {
+                            bytesRead = inStream.ReadAsync(data, 0, blockSize).Result;
+                        } while (bytesRead != 0);
+                    }
                 }
             }
         }

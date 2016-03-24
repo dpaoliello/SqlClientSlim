@@ -51,10 +51,6 @@ namespace System.Data.SqlClient
         // we need to keep track of how many bytes are left in the packet, so that we know when we have reached
         // the end of the packet and so we need to consume the next header.  That variable is _inBytesPacket.
 
-        // Header length constants
-        internal readonly int _inputHeaderLen = TdsEnums.HEADER_LEN;
-        internal readonly int _outputHeaderLen = TdsEnums.HEADER_LEN;
-
         // Out buffer variables
         internal byte[] _outBuff;                                     // internal write buffer - initialize on login
         internal int _outBytesUsed = TdsEnums.HEADER_LEN; // number of bytes used in internal write buffer -
@@ -83,9 +79,6 @@ namespace System.Data.SqlClient
         // SNI variables                                                     // multiple resultsets in one batch.
         private SNIPacket _sniPacket = null;                // Will have to re-vamp this for MARS
         internal SNIPacket _sniAsyncAttnPacket = null;                // Packet to use to send Attn
-        private WritePacketCache _writePacketCache = new WritePacketCache(); // Store write packets that are ready to be re-used
-        private Dictionary<SNIPacket, SNIPacket> _pendingWritePackets = new Dictionary<SNIPacket, SNIPacket>(); // Stores write packets that have been sent to SNI, but have not yet finished writing (i.e. we are waiting for SNI's callback)
-        private object _writePacketLockObject = new object();        // Used to synchronize access to _writePacketCache and _pendingWritePackets
 
         // Async variables
         private int _pendingCallbacks;                            // we increment this before each async read/write call and decrement it in the callback.  We use this to determine when to release the GcHandle...
@@ -125,7 +118,6 @@ namespace System.Data.SqlClient
         // TDS stream processing variables
         internal ulong _longlen;                                     // plp data length indicator
         internal ulong _longlenleft;                                 // Length of data left to read (64 bit lengths)
-        internal int[] _decimalBits = null;                // scratch buffer for decimal/numeric data
         internal byte[] _bTmp = new byte[TdsEnums.YUKON_HEADER_LEN];  // Scratch buffer for misc use
         internal int _bTmpRead = 0;                   // Counter for number of temporary bytes read
         internal Decoder _plpdecoder = null;             // Decoder object to process plp character data
@@ -955,27 +947,27 @@ namespace System.Data.SqlClient
             Debug.Assert(_inBytesPacket == 0, "there should not be any bytes left in packet when ReadHeader is called");
 
             // if the header splits buffer reads - special case!
-            if ((_partialHeaderBytesRead > 0) || (_inBytesUsed + _inputHeaderLen > _inBytesRead))
+            if ((_partialHeaderBytesRead > 0) || (_inBytesUsed + TdsEnums.HEADER_LEN > _inBytesRead))
             {
                 // VSTS 219884: when some kind of MITM (man-in-the-middle) tool splits the network packets, the message header can be split over 
                 // several network packets.
                 // Note: cannot use ReadByteArray here since it uses _inBytesPacket which is not set yet.
                 do
                 {
-                    int copy = Math.Min(_inBytesRead - _inBytesUsed, _inputHeaderLen - _partialHeaderBytesRead);
+                    int copy = Math.Min(_inBytesRead - _inBytesUsed, TdsEnums.HEADER_LEN - _partialHeaderBytesRead);
                     Debug.Assert(copy > 0, "ReadNetworkPacket read empty buffer");
 
                     Buffer.BlockCopy(_inBuff, _inBytesUsed, _partialHeaderBuffer, _partialHeaderBytesRead, copy);
                     _partialHeaderBytesRead += copy;
                     _inBytesUsed += copy;
 
-                    Debug.Assert(_partialHeaderBytesRead <= _inputHeaderLen, "Read more bytes for header than required");
-                    if (_partialHeaderBytesRead == _inputHeaderLen)
+                    Debug.Assert(_partialHeaderBytesRead <= TdsEnums.HEADER_LEN, "Read more bytes for header than required");
+                    if (_partialHeaderBytesRead == TdsEnums.HEADER_LEN)
                     {
                         // All read
                         _partialHeaderBytesRead = 0;
                         _inBytesPacket = ((int)_partialHeaderBuffer[TdsEnums.HEADER_LEN_FIELD_OFFSET] << 8 |
-                                  (int)_partialHeaderBuffer[TdsEnums.HEADER_LEN_FIELD_OFFSET + 1]) - _inputHeaderLen;
+                                  (int)_partialHeaderBuffer[TdsEnums.HEADER_LEN_FIELD_OFFSET + 1]) - TdsEnums.HEADER_LEN;
 
                         _messageStatus = _partialHeaderBuffer[1];
                     }
@@ -1012,8 +1004,8 @@ namespace System.Data.SqlClient
                 // normal header processing...
                 _messageStatus = _inBuff[_inBytesUsed + 1];
                 _inBytesPacket = ((int)_inBuff[_inBytesUsed + TdsEnums.HEADER_LEN_FIELD_OFFSET] << 8 |
-                                              (int)_inBuff[_inBytesUsed + TdsEnums.HEADER_LEN_FIELD_OFFSET + 1]) - _inputHeaderLen;
-                _inBytesUsed += _inputHeaderLen;
+                                              (int)_inBuff[_inBytesUsed + TdsEnums.HEADER_LEN_FIELD_OFFSET + 1]) - TdsEnums.HEADER_LEN;
+                _inBytesUsed += TdsEnums.HEADER_LEN;
 
                 AssertValidState();
             }
@@ -1094,7 +1086,7 @@ namespace System.Data.SqlClient
 
         internal void ResetBuffer()
         {
-            _outBytesUsed = _outputHeaderLen;
+            _outBytesUsed = TdsEnums.HEADER_LEN;
         }
 
         internal bool SetPacketSize(int size)
@@ -1112,10 +1104,10 @@ namespace System.Data.SqlClient
                           "SetPacketSize should only be called on a stateObj with null buffers on the physicalStateObj!");
             Debug.Assert(_inBuff == null
                           || (
-                          _outBytesUsed == (_outputHeaderLen + BitConverter.ToInt32(_outBuff, _outputHeaderLen)) &&
+                          _outBytesUsed == (TdsEnums.HEADER_LEN + BitConverter.ToInt32(_outBuff, TdsEnums.HEADER_LEN)) &&
                           _outputPacketNumber == 1)
                           ||
-                          (_outBytesUsed == _outputHeaderLen && _outputPacketNumber == 1),
+                          (_outBytesUsed == TdsEnums.HEADER_LEN && _outputPacketNumber == 1),
                           "SetPacketSize called with data in the buffer!");
 
             if (_inBuff == null || _inBuff.Length != size)
@@ -1162,7 +1154,7 @@ namespace System.Data.SqlClient
 
                 // Always re-allocate _outBuff - assert is above to verify state.
                 _outBuff = new byte[size];
-                _outBytesUsed = _outputHeaderLen;
+                _outBytesUsed = TdsEnums.HEADER_LEN;
 
                 AssertValidState();
                 return true;
@@ -2744,7 +2736,6 @@ namespace System.Data.SqlClient
 
         public void WriteAsyncCallback(SNIPacket packet, SNIError sniError)
         { // Key never used.
-            RemovePacketFromPendingList(packet);
             try
             {
                 if (sniError != null)
@@ -3004,9 +2995,9 @@ namespace System.Data.SqlClient
                 // So we need to avoid this check prior to login completing
                 _parser.State == TdsParserState.OpenLoggedIn &&
                 !_bulkCopyOpperationInProgress && // ignore the condition checking for bulk copy
-                    _outBytesUsed == (_outputHeaderLen + BitConverter.ToInt32(_outBuff, _outputHeaderLen))
+                    _outBytesUsed == (TdsEnums.HEADER_LEN + BitConverter.ToInt32(_outBuff, TdsEnums.HEADER_LEN))
                     && _outputPacketNumber == 1
-                || _outBytesUsed == _outputHeaderLen
+                || _outBytesUsed == TdsEnums.HEADER_LEN
                     && _outputPacketNumber == 1)
             {
                 return null;
@@ -3112,11 +3103,6 @@ namespace System.Data.SqlClient
                 }
                 Debug.Assert(_asyncWriteCount == 0, "All async write should be finished");
             }
-            if (!sync)
-            {
-                // Add packet to the pending list (since the callback can happen any time after we call SNIWritePacket)
-                AddPacketToPendingList(packet);
-            }
 
             // Async operation completion may be delayed (success pending).
             bool completedSync = false;
@@ -3197,18 +3183,6 @@ namespace System.Data.SqlClient
                 if (sniError == null)
                 {
                     _lastSuccessfulIOTimer._value = DateTime.UtcNow.Ticks;
-
-                    if (!sync)
-                    {
-                        // Since there will be no callback, remove the packet from the pending list
-#if MANAGED_SNI
-                        Debug.Assert(!packet.IsInvalid, "Packet added to list has an invalid pointer, can not remove from pending list");
-                        RemovePacketFromPendingList(packet);
-#else
-                        Debug.Assert(packetPointer != IntPtr.Zero, "Packet added to list has an invalid pointer, can not remove from pending list");
-                        RemovePacketFromPendingList(packetPointer);
-#endif // MANAGED_SNI
-                    }
                 }
                 else
                 {
@@ -3359,96 +3333,21 @@ namespace System.Data.SqlClient
 
         internal SNIPacket GetResetWritePacket()
         {
-            if (_sniPacket != null)
+            if (_sniPacket == null)
             {
-            }
-            else
-            {
-                lock (_writePacketLockObject)
-                {
-                    _sniPacket = _writePacketCache.Take(Handle);
-                }
+                _sniPacket = new SNIPacket(_sessionHandle);
             }
             return _sniPacket;
         }
 
         internal void ClearAllWritePackets()
         {
+            Debug.Assert(_asyncWriteCount == 0, "Should not clear all write packets if there are packets pending");
             if (_sniPacket != null)
             {
                 _sniPacket = null;
             }
-            lock (_writePacketLockObject)
-            {
-                Debug.Assert(_pendingWritePackets.Count == 0 && _asyncWriteCount == 0, "Should not clear all write packets if there are packets pending");
-                _writePacketCache.Clear();
-            }
         }
-
-#if MANAGED_SNI
-        private void AddPacketToPendingList(SNIPacket packet) {
-        /*
-            Debug.Assert(packet == _sniPacket, "Adding a packet other than the current packet to the pending list");
-            _sniPacket = null;
-            
-            lock (_writePacketLockObject) {
-                _pendingWritePackets.Add(packet, packet);
-            }
-            */
-        }
-
-        private void RemovePacketFromPendingList(SNIPacket packet) {
-        /*
-            SNIPacket recoveredPacket = null;
-
-            lock (_writePacketLockObject) {
-                if (_pendingWritePackets.TryGetValue(packet, out recoveredPacket)) {
-                    _pendingWritePackets.Remove(recoveredPacket);
-                    _writePacketCache.Add(recoveredPacket);
-                }
-#if DEBUG
-                else {
-                    Debug.Assert(false, "Removing a packet from the pending list that was never added to it");
-                }
-#endif // DEBUG
-            }
-        */
-        }
-#else
-        private IntPtr AddPacketToPendingList(SNIPacket packet)
-        {
-            Debug.Assert(packet == _sniPacket, "Adding a packet other than the current packet to the pending list");
-            _sniPacket = null;
-            IntPtr pointer = packet.DangerousGetHandle();
-
-            lock (_writePacketLockObject)
-            {
-                _pendingWritePackets.Add(pointer, packet);
-            }
-
-            return pointer;
-        }
-
-        private void RemovePacketFromPendingList(IntPtr pointer)
-        {
-            SNIPacket recoveredPacket;
-
-            lock (_writePacketLockObject)
-            {
-                if (_pendingWritePackets.TryGetValue(pointer, out recoveredPacket))
-                {
-                    _pendingWritePackets.Remove(pointer);
-                    _writePacketCache.Add(recoveredPacket);
-                }
-#if DEBUG
-                else
-                {
-                    Debug.Assert(false, "Removing a packet from the pending list that was never added to it");
-                }
-#endif
-            }
-        }
-#endif
 
         //////////////////////////////////////////////
         // Statistics, Tracing, and related methods //
@@ -3587,26 +3486,6 @@ namespace System.Data.SqlClient
                 _warnings.Add(error);
             }
         }
-
-        /// <summary>
-        /// Gets the number of warnings currently in the warning collection
-        /// </summary>
-        internal int WarningCount
-        {
-            get
-            {
-                int count = 0;
-                lock (_errorAndWarningsLock)
-                {
-                    if (_warnings != null)
-                    {
-                        count = _warnings.Count;
-                    }
-                }
-                return count;
-            }
-        }
-
 
         /// <summary>
         /// Gets the full list of errors and warnings (including the pre-attention ones), then wipes all error and warning lists
@@ -3811,38 +3690,6 @@ namespace System.Data.SqlClient
             public string Stack;
 #endif
         }
-
-#if MANAGED_SNI
-    internal sealed class WritePacketCache {
-            private Stack<SNIPacket> _packets;
-
-            public WritePacketCache() {
-                _packets = new Stack<SNIPacket>();
-            }
-
-            public SNIPacket Take(SNIHandle sniHandle) {
-                SNIPacket packet;
-                if (_packets.Count > 0) {
-                    // Success - reset the packet
-                    packet = _packets.Pop();
-                    SNIProxy.Singleton.PacketReset(sniHandle, true, packet);
-                }
-                else {
-                    // Failed to take a packet - create a new one
-                    packet = new SNIPacket(sniHandle);
-                }
-                return packet;
-            }
-
-            public void Add(SNIPacket packet) {
-                _packets.Push(packet);
-            }
-
-            public void Clear() {
-                _packets.Clear();
-            }
-        }
-#endif // MANAGED_SNI
 
         private class StateSnapshot
         {

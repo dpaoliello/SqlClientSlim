@@ -73,7 +73,6 @@ namespace System.Data.SqlClient
 
         private MetaType _internalMetaType;
         private SqlBuffer _sqlBufferReturnValue;
-        private INullable _valueAsINullable;
         private bool _isSqlParameterSqlType;
         private bool _isNull = true;
         private bool _coercedValueIsSqlType;
@@ -254,15 +253,6 @@ namespace System.Data.SqlClient
                     throw ADP.ArgumentOutOfRange("LocaleId");
                 }
                 collation.LCID = value;
-            }
-        }
-
-
-        internal bool SizeInferred
-        {
-            get
-            {
-                return 0 == _size;
             }
         }
 
@@ -591,11 +581,6 @@ namespace System.Data.SqlClient
             }
         }
 
-        private bool ShouldSerializeSqlDbType()
-        {
-            return (null != _metaType);
-        }
-
         public void ResetSqlDbType()
         {
             if (null != _metaType)
@@ -682,18 +667,10 @@ namespace System.Data.SqlClient
                 _value = value;
                 _sqlBufferReturnValue = null;
                 _coercedValue = null;
-                _valueAsINullable = _value as INullable;
-                _isSqlParameterSqlType = (_valueAsINullable != null);
-                _isNull = ((_value == null) || (_value == DBNull.Value) || ((_isSqlParameterSqlType) && (_valueAsINullable.IsNull)));
+                INullable valueAsINullable = _value as INullable;
+                _isSqlParameterSqlType = (valueAsINullable != null);
+                _isNull = ((_value == null) || (_value == DBNull.Value) || ((_isSqlParameterSqlType) && (valueAsINullable.IsNull)));
                 _actualSize = -1;
-            }
-        }
-
-        internal INullable ValueAsINullable
-        {
-            get
-            {
-                return _valueAsINullable;
             }
         }
 
@@ -704,7 +681,7 @@ namespace System.Data.SqlClient
                 // NOTE: Udts can change their value any time
                 if (_internalMetaType.SqlDbType == Data.SqlDbType.Udt)
                 {
-                    _isNull = ((_value == null) || (_value == DBNull.Value) || ((_isSqlParameterSqlType) && (_valueAsINullable.IsNull)));
+                    _isNull = ((_value == null) || (_value == DBNull.Value) || ((_isSqlParameterSqlType) && ((Value as INullable).IsNull)));
                 }
                 return _isNull;
             }
@@ -816,7 +793,6 @@ namespace System.Data.SqlClient
 
             return _actualSize;
         }
-
 
         // Coerced Value is also used in SqlBulkCopy.ConvertValue(object value, _SqlMetaData metadata)
         internal static object CoerceValue(object value, MetaType destinationType, out bool coercedToDataFeed, out bool typeChanged, bool allowStreaming = true)
@@ -1362,7 +1338,6 @@ namespace System.Data.SqlClient
             _coercedValueIsSqlType = false;
             _actualSize = -1;
         }
-
 
         internal void Validate(int index, bool isCommandProc)
         {

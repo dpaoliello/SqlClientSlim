@@ -16,6 +16,8 @@ namespace PerfTest
 
         private static void RunSlimAndFull(Engine perfEngine, Action slimTest, Action fullTest, string testName, TimeSpan warmupTime, TimeSpan runningTime)
         {
+            GC.Collect(generation: 2, mode: GCCollectionMode.Forced, blocking: true, compacting: true);
+
             Console.WriteLine("------------------");
             Console.WriteLine($"{testName} running for {runningTime}");
 
@@ -24,6 +26,8 @@ namespace PerfTest
 
             iterations = perfEngine.RunTest(fullTest, warmupTime, runningTime);
             Console.WriteLine($"Full: {iterations}");
+
+            GC.Collect(generation: 2, mode: GCCollectionMode.Forced, blocking: true, compacting: true);
         }
     }
 }

@@ -22,6 +22,7 @@
     <Compile Include="SqlConnectionStringBuilderTests.cs" />
     <Compile Include="SqlConnectionTests.cs" />
     <Compile Include="SqlDataReaderTests.cs" />
+    <Compile Include="SqlParameterCollectionTests.cs" />
     <Compile Include="SqlParameterTests.cs" />
     <Compile Include="Utilities.cs" />
   </ItemGroup>

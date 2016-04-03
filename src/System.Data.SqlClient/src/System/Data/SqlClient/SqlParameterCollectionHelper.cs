@@ -9,7 +9,6 @@ using System.Collections.Generic;
 using System.Data.Common;
 using System.Diagnostics;
 using System.Globalization;
-using System.Reflection;
 
 namespace System.Data.SqlClient
 {
@@ -21,7 +20,7 @@ namespace System.Data.SqlClient
         {
             get
             {
-                return ((null != _items) ? _items.Count : 0);
+                return _items?.Count ?? 0;
             }
         }
 
@@ -29,14 +28,11 @@ namespace System.Data.SqlClient
         {
             get
             {
-                List<SqlParameter> items = _items;
-
-                if (null == items)
+                if (_items == null)
                 {
-                    items = new List<SqlParameter>();
-                    _items = items;
+                    _items = new List<SqlParameter>();
                 }
-                return items;
+                return _items;
             }
         }
 
@@ -52,9 +48,9 @@ namespace System.Data.SqlClient
         override public int Add(object value)
         {
             OnChange();
-            ValidateType(value);
-            Validate(-1, value);
-            InnerList.Add((SqlParameter)value);
+            SqlParameter castedValue = ValidateType(value);
+            Validate(-1, castedValue);
+            InnerList.Add(castedValue);
             return Count - 1;
         }
 
@@ -72,7 +68,7 @@ namespace System.Data.SqlClient
             foreach (SqlParameter value in values)
             {
                 Validate(-1, value);
-                InnerList.Add((SqlParameter)value);
+                InnerList.Add(value);
             }
         }
 
@@ -81,7 +77,7 @@ namespace System.Data.SqlClient
             int index = IndexOf(parameterName);
             if (index < 0)
             {
-                throw ADP.ParametersSourceIndex(parameterName, this, s_itemType);
+                throw ADP.ParametersSourceIndex(parameterName, this, typeof(SqlParameter));
             }
             return index;
         }
@@ -89,7 +85,7 @@ namespace System.Data.SqlClient
         override public void Clear()
         {
             OnChange();
-            List<SqlParameter> items = InnerList;
+            List<SqlParameter> items = _items;
 
             if (null != items)
             {
@@ -127,12 +123,12 @@ namespace System.Data.SqlClient
             int index = IndexOf(parameterName);
             if (index < 0)
             {
-                throw ADP.ParametersSourceIndex(parameterName, this, s_itemType);
+                throw ADP.ParametersSourceIndex(parameterName, this, typeof(SqlParameter));
             }
             return InnerList[index];
         }
 
-        private static int IndexOf(System.Collections.IEnumerable items, string parameterName)
+        private static int IndexOf(IEnumerable<SqlParameter> items, string parameterName)
         {
             if (null != items)
             {
@@ -169,21 +165,12 @@ namespace System.Data.SqlClient
         {
             if (null != value)
             {
-                ValidateType(value);
+                SqlParameter castedValue = ValidateType(value);
 
-                List<SqlParameter> items = InnerList;
-
+                List<SqlParameter> items = _items;
                 if (null != items)
                 {
-                    int count = items.Count;
-
-                    for (int i = 0; i < count; i++)
-                    {
-                        if (value == items[i])
-                        {
-                            return i;
-                        }
-                    }
+                    return items.IndexOf(castedValue);
                 }
             }
             return -1;
@@ -192,9 +179,9 @@ namespace System.Data.SqlClient
         override public void Insert(int index, object value)
         {
             OnChange();
-            ValidateType(value);
-            Validate(-1, (SqlParameter)value);
-            InnerList.Insert(index, (SqlParameter)value);
+            SqlParameter castedValue = ValidateType(value);
+            Validate(-1, castedValue);
+            InnerList.Insert(index, castedValue);
         }
 
         private void RangeCheck(int index)
@@ -208,15 +195,15 @@ namespace System.Data.SqlClient
         override public void Remove(object value)
         {
             OnChange();
-            ValidateType(value);
-            int index = IndexOf(value);
+            SqlParameter castedValue = ValidateType(value);
+            int index = InnerList.IndexOf(castedValue);
             if (-1 != index)
             {
                 RemoveIndex(index);
             }
             else if (this != ((SqlParameter)value).CompareExchangeParent(null, this))
             {
-                throw ADP.CollectionRemoveInvalidObject(s_itemType, this);
+                throw ADP.CollectionRemoveInvalidObject(typeof(SqlParameter), this);
             }
         }
 
@@ -247,11 +234,14 @@ namespace System.Data.SqlClient
         {
             List<SqlParameter> items = InnerList;
             Debug.Assert((null != items) && (0 <= index) && (index < Count), "Replace Index invalid");
-            ValidateType(newValue);
-            Validate(index, newValue);
+            SqlParameter castedValue = ValidateType(newValue);
+            Validate(index, castedValue);
             SqlParameter item = items[index];
-            items[index] = (SqlParameter)newValue;
-            item.ResetParent();
+            if (!object.ReferenceEquals(castedValue, item))
+            {
+                items[index] = castedValue;
+                item.ResetParent();
+            }
         }
 
         override protected void SetParameter(int index, DbParameter value)
@@ -267,32 +257,32 @@ namespace System.Data.SqlClient
             int index = IndexOf(parameterName);
             if (index < 0)
             {
-                throw ADP.ParametersSourceIndex(parameterName, this, s_itemType);
+                throw ADP.ParametersSourceIndex(parameterName, this, typeof(SqlParameter));
             }
             Replace(index, value);
         }
 
-        private void Validate(int index, object value)
+        private void Validate(int index, SqlParameter value)
         {
             if (null == value)
             {
-                throw ADP.ParameterNull("value", this, s_itemType);
+                throw ADP.ParameterNull("value", this, typeof(SqlParameter));
             }
 
-            object parent = ((SqlParameter)value).CompareExchangeParent(this, null);
+            object parent = value.CompareExchangeParent(this, null);
             if (null != parent)
             {
                 if (this != parent)
                 {
-                    throw ADP.ParametersIsNotParent(s_itemType, this);
+                    throw ADP.ParametersIsNotParent(typeof(SqlParameter), this);
                 }
                 if (index != IndexOf(value))
                 {
-                    throw ADP.ParametersIsParent(s_itemType, this);
+                    throw ADP.ParametersIsParent(typeof(SqlParameter), this);
                 }
             }
 
-            String name = ((SqlParameter)value).ParameterName;
+            String name = value.ParameterName;
             if (0 == name.Length)
             {
                 index = 1;
@@ -301,19 +291,27 @@ namespace System.Data.SqlClient
                     name = ADP.Parameter + index.ToString(CultureInfo.CurrentCulture);
                     index++;
                 } while (-1 != IndexOf(name));
-                ((SqlParameter)value).ParameterName = name;
+                value.ParameterName = name;
             }
         }
 
-        private void ValidateType(object value)
+        private SqlParameter ValidateType(object value)
         {
             if (null == value)
             {
-                throw ADP.ParameterNull("value", this, s_itemType);
+                throw ADP.ParameterNull("value", this, typeof(SqlParameter));
             }
-            else if (!s_itemType.IsInstanceOfType(value))
+            else
             {
-                throw ADP.InvalidParameterType(this, s_itemType, value);
+                SqlParameter castedValue = value as SqlParameter;
+                if (castedValue != null)
+                {
+                    return castedValue;
+                }
+                else
+                {
+                    throw ADP.InvalidParameterType(this, typeof(SqlParameter), value);
+                }
             }
         }
     };

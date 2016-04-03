@@ -12,7 +12,6 @@ namespace System.Data.SqlClient
     public sealed partial class SqlParameterCollection : DbParameterCollection
     {
         private bool _isDirty;
-        private static Type s_itemType = typeof(SqlParameter);
 
         internal SqlParameterCollection() : base()
         {

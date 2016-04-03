@@ -53,7 +53,7 @@ namespace System.Data.SqlClient
         internal readonly bool Is90Supported;
         internal readonly bool Is100Supported;
 
-        public MetaType(byte precision, byte scale, int fixedLength, bool isFixed, bool isLong, bool isPlp, byte tdsType, byte nullableTdsType, string typeName, Type classType, Type sqlType, SqlDbType sqldbType, DbType dbType, byte propBytes)
+        private MetaType(byte precision, byte scale, int fixedLength, bool isFixed, bool isLong, bool isPlp, byte tdsType, byte nullableTdsType, string typeName, Type classType, Type sqlType, SqlDbType sqldbType, DbType dbType, byte propBytes)
         {
             this.Precision = precision;
             this.Scale = scale;

@@ -9,6 +9,7 @@ namespace PerfTest
             Engine perfEngine = new Engine(threadCount: 4);
 
             RunSlimAndFull(perfEngine, SqlClientSlimTests.OpenPooledConnectionTest, SqlClientFullTests.OpenPooledConnectionTest, "CreateConnectionTest", TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(15));
+            RunSlimAndFull(perfEngine, SqlClientSlimTests.SelectOneTest, SqlClientFullTests.SelectOneTest, "SelectOneTest", TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(15));
             RunSlimAndFull(perfEngine, SqlClientSlimTests.SelectParametersTest, SqlClientFullTests.SelectParametersTest, "SelectParametersTest", TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(15));
             RunSlimAndFull(perfEngine, SqlClientSlimTests.LargeStreamTest, SqlClientFullTests.LargeStreamTest, "LargeStreamTest", TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(15));
         }

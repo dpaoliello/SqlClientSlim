@@ -17,7 +17,8 @@ namespace PerfTest
 <#
     foreach (var alias in aliases)
     {
-        string qualifier = alias + "::System.Data.SqlClient.";
+        string systemDataQualifier = alias + "::System.Data.";
+        string sqlclientQualifier = systemDataQualifier + "SqlClient.";
 #>
 
     internal static class <#= alias #>Tests
@@ -26,19 +27,31 @@ namespace PerfTest
 
         public static void OpenPooledConnectionTest()
         {
-            using (var connection = new <#= qualifier #>SqlConnection(SqlAuthConnectionString))
+            using (var connection = new <#= sqlclientQualifier #>SqlConnection(SqlAuthConnectionString))
             {
                 connection.OpenAsync().Wait();
             }
         }
 
+        public static void SelectOneTest()
+        {
+            using (var connection = new <#= sqlclientQualifier #>SqlConnection(SqlAuthConnectionString))
+            using (var command = new <#= sqlclientQualifier #>SqlCommand("SELECT 1", connection))
+            {
+                connection.OpenAsync().Wait();
+                command.ExecuteScalarAsync().Wait();
+            }
+        }
+
         public static void SelectParametersTest()
         {
-            using (var connection = new <#= qualifier #>SqlConnection(SqlAuthConnectionString))
-            using (var command = new <#= qualifier #>SqlCommand("SELECT @number, @string", connection))
+            using (var connection = new <#= sqlclientQualifier #>SqlConnection(SqlAuthConnectionString))
+            using (var command = new <#= sqlclientQualifier #>SqlCommand("SELECT @number, @string, @coercenumber, @coercestring", connection))
             {
-                command.Parameters.Add(new <#= qualifier #>SqlParameter("number", 1));
-                command.Parameters.Add(new <#= qualifier #>SqlParameter("string", "Hello, World!"));
+                command.Parameters.Add(new <#= sqlclientQualifier #>SqlParameter("number", 1));
+                command.Parameters.Add(new <#= sqlclientQualifier #>SqlParameter("string", "Hello, World!"));
+                command.Parameters.Add(new <#= sqlclientQualifier #>SqlParameter("coercenumber", <#= systemDataQualifier #>SqlDbType.Int) { Value = 1.5 });
+                command.Parameters.Add(new <#= sqlclientQualifier #>SqlParameter("coercestring", <#= systemDataQualifier #>SqlDbType.NVarChar) { Value = 2 });
 
                 connection.OpenAsync().Wait();
                 using (var reader = command.ExecuteReaderAsync().Result)
@@ -47,6 +60,8 @@ namespace PerfTest
 
                     reader.GetFieldValue<int>(0);
                     reader.GetFieldValue<string>(1);
+                    reader.GetFieldValue<int>(2);
+                    reader.GetFieldValue<string>(3);
                 }
             }
         }
@@ -56,11 +71,11 @@ namespace PerfTest
             const int dataSize = 128 * 1024;
             const int blockSize = 1024;
 
-            using (var connection = new <#= qualifier #>SqlConnection(SqlAuthConnectionString))
-            using (var command = new <#= qualifier #>SqlCommand("SELECT @data", connection))
+            using (var connection = new <#= sqlclientQualifier #>SqlConnection(SqlAuthConnectionString))
+            using (var command = new <#= sqlclientQualifier #>SqlCommand("SELECT @data", connection))
             {
                 var outStream = new MockStream(dataSize);
-                command.Parameters.Add(new <#= qualifier #>SqlParameter("data", outStream));
+                command.Parameters.Add(new <#= sqlclientQualifier #>SqlParameter("data", outStream));
 
                 connection.OpenAsync().Wait();
                 using (var reader = command.ExecuteReaderAsync().Result)

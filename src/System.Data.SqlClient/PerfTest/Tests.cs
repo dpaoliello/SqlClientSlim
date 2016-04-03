@@ -16,13 +16,25 @@ namespace PerfTest
             }
         }
 
+        public static void SelectOneTest()
+        {
+            using (var connection = new SqlClientSlim::System.Data.SqlClient.SqlConnection(SqlAuthConnectionString))
+            using (var command = new SqlClientSlim::System.Data.SqlClient.SqlCommand("SELECT 1", connection))
+            {
+                connection.OpenAsync().Wait();
+                command.ExecuteScalarAsync().Wait();
+            }
+        }
+
         public static void SelectParametersTest()
         {
             using (var connection = new SqlClientSlim::System.Data.SqlClient.SqlConnection(SqlAuthConnectionString))
-            using (var command = new SqlClientSlim::System.Data.SqlClient.SqlCommand("SELECT @number, @string", connection))
+            using (var command = new SqlClientSlim::System.Data.SqlClient.SqlCommand("SELECT @number, @string, @coercenumber, @coercestring", connection))
             {
                 command.Parameters.Add(new SqlClientSlim::System.Data.SqlClient.SqlParameter("number", 1));
                 command.Parameters.Add(new SqlClientSlim::System.Data.SqlClient.SqlParameter("string", "Hello, World!"));
+                command.Parameters.Add(new SqlClientSlim::System.Data.SqlClient.SqlParameter("coercenumber", SqlClientSlim::System.Data.SqlDbType.Int) { Value = 1.5 });
+                command.Parameters.Add(new SqlClientSlim::System.Data.SqlClient.SqlParameter("coercestring", SqlClientSlim::System.Data.SqlDbType.NVarChar) { Value = 2 });
 
                 connection.OpenAsync().Wait();
                 using (var reader = command.ExecuteReaderAsync().Result)
@@ -31,6 +43,8 @@ namespace PerfTest
 
                     reader.GetFieldValue<int>(0);
                     reader.GetFieldValue<string>(1);
+                    reader.GetFieldValue<int>(2);
+                    reader.GetFieldValue<string>(3);
                 }
             }
         }
@@ -78,13 +92,25 @@ namespace PerfTest
             }
         }
 
+        public static void SelectOneTest()
+        {
+            using (var connection = new SqlClientFull::System.Data.SqlClient.SqlConnection(SqlAuthConnectionString))
+            using (var command = new SqlClientFull::System.Data.SqlClient.SqlCommand("SELECT 1", connection))
+            {
+                connection.OpenAsync().Wait();
+                command.ExecuteScalarAsync().Wait();
+            }
+        }
+
         public static void SelectParametersTest()
         {
             using (var connection = new SqlClientFull::System.Data.SqlClient.SqlConnection(SqlAuthConnectionString))
-            using (var command = new SqlClientFull::System.Data.SqlClient.SqlCommand("SELECT @number, @string", connection))
+            using (var command = new SqlClientFull::System.Data.SqlClient.SqlCommand("SELECT @number, @string, @coercenumber, @coercestring", connection))
             {
                 command.Parameters.Add(new SqlClientFull::System.Data.SqlClient.SqlParameter("number", 1));
                 command.Parameters.Add(new SqlClientFull::System.Data.SqlClient.SqlParameter("string", "Hello, World!"));
+                command.Parameters.Add(new SqlClientFull::System.Data.SqlClient.SqlParameter("coercenumber", SqlClientFull::System.Data.SqlDbType.Int) { Value = 1.5 });
+                command.Parameters.Add(new SqlClientFull::System.Data.SqlClient.SqlParameter("coercestring", SqlClientFull::System.Data.SqlDbType.NVarChar) { Value = 2 });
 
                 connection.OpenAsync().Wait();
                 using (var reader = command.ExecuteReaderAsync().Result)
@@ -93,6 +119,8 @@ namespace PerfTest
 
                     reader.GetFieldValue<int>(0);
                     reader.GetFieldValue<string>(1);
+                    reader.GetFieldValue<int>(2);
+                    reader.GetFieldValue<string>(3);
                 }
             }
         }

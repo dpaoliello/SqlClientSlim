@@ -816,15 +816,15 @@ namespace System.Data.SqlClient
                     if ((typeof(string) == destinationType.ClassType))
                     {
                         // For Xml data, destination Type is always string
-                        if (typeof(SqlXml) == currentType)
+                        if (value is SqlXml)
                         {
                             value = MetaType.GetStringFromXml((XmlReader)(((SqlXml)value).CreateReader()));
                         }
-                        else if (typeof(SqlString) == currentType)
+                        else if (value is SqlString)
                         {
                             typeChanged = false;   // Do nothing
                         }
-                        else if (typeof(XmlReader).IsAssignableFrom(currentType))
+                        else if (value is XmlReader)
                         {
                             if (allowStreaming)
                             {
@@ -836,11 +836,11 @@ namespace System.Data.SqlClient
                                 value = MetaType.GetStringFromXml((XmlReader)value);
                             }
                         }
-                        else if (typeof(char[]) == currentType)
+                        else if (value is char[])
                         {
                             value = new string((char[])value);
                         }
-                        else if (typeof(SqlChars) == currentType)
+                        else if (value is SqlChars)
                         {
                             value = new string(((SqlChars)value).Value);
                         }
@@ -854,23 +854,23 @@ namespace System.Data.SqlClient
                             value = Convert.ChangeType(value, destinationType.ClassType, (IFormatProvider)null);
                         }
                     }
-                    else if ((DbType.Currency == destinationType.DbType) && (typeof(string) == currentType))
+                    else if ((DbType.Currency == destinationType.DbType) && (value is string))
                     {
                         value = Decimal.Parse((string)value, NumberStyles.Currency, (IFormatProvider)null); // WebData 99376
                     }
-                    else if ((typeof(SqlBytes) == currentType) && (typeof(byte[]) == destinationType.ClassType))
+                    else if ((value is SqlBytes) && (typeof(byte[]) == destinationType.ClassType))
                     {
                         typeChanged = false;    // Do nothing
                     }
-                    else if ((typeof(string) == currentType) && (SqlDbType.Time == destinationType.SqlDbType))
+                    else if ((value is string) && (SqlDbType.Time == destinationType.SqlDbType))
                     {
                         value = TimeSpan.Parse((string)value);
                     }
-                    else if ((typeof(string) == currentType) && (SqlDbType.DateTimeOffset == destinationType.SqlDbType))
+                    else if ((value is string) && (SqlDbType.DateTimeOffset == destinationType.SqlDbType))
                     {
                         value = DateTimeOffset.Parse((string)value, (IFormatProvider)null);
                     }
-                    else if ((typeof(DateTime) == currentType) && (SqlDbType.DateTimeOffset == destinationType.SqlDbType))
+                    else if ((value is DateTime) && (SqlDbType.DateTimeOffset == destinationType.SqlDbType))
                     {
                         value = new DateTimeOffset((DateTime)value);
                     }

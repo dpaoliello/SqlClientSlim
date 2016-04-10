@@ -8,7 +8,7 @@ packages/
 
 # Visual Studio temp files
 .vs/
-project.lock.json
+*.lock.json
 
 # General temp files
 *.log

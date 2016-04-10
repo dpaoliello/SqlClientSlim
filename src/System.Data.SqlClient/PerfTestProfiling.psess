@@ -67,11 +67,6 @@
       <ProjName>PerfTest</ProjName>
     </ProjBinary>
   </Binaries>
-  <Reports>
-    <Report>
-      <Path>PerfTest151108.vspx</Path>
-    </Report>
-  </Reports>
   <Launches>
     <ProjBinary>
       <Path>:PB:{37515F41-71B2-4AFC-AD6A-B4CE1928C7D5}|PerfTest\PerfTest.csproj</Path>

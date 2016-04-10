@@ -10,4 +10,5 @@
   * System.Console
   * System.Linq
   * System.Threading.ThreadPool
+  * System.Reflection.TypeExtensions
 * `SqlErrorCollection` now implements `IReadOnlyList<T>`

@@ -16,8 +16,8 @@ namespace System.Data.SqlClient.Tests
         {
             const string testString = "Hello, World!";
 
-            yield return new object[] { new SqlXml(CreateXmlReader("<a><b /><c>text</c></a>")), "<a><b /><c>text</c></a>" };
-            yield return new object[] { CreateXmlReader("<a><b /><c>text</c></a>"), "<a><b /><c>text</c></a>" };
+            yield return new object[] { new SqlXml(Utilities.CreateXmlReader("<a><b /><c>text</c></a>")), "<a><b /><c>text</c></a>" };
+            yield return new object[] { Utilities.CreateXmlReader("<a><b /><c>text</c></a>"), "<a><b /><c>text</c></a>" };
             yield return new object[] { new SqlString(testString), testString };
             yield return new object[] { testString.ToCharArray(), testString };
             yield return new object[] { new SqlChars(testString.ToCharArray()), testString };
@@ -144,14 +144,6 @@ namespace System.Data.SqlClient.Tests
                 T oututValue = (T)await command.ExecuteScalarAsync();
                 return oututValue;
             }
-        }
-
-        /// <summary>
-        /// Creates an XmlReader for the given XML text fragment.
-        /// </summary>
-        private static XmlReader CreateXmlReader(string xmlText)
-        {
-            return XmlReader.Create(new StringReader(xmlText), new XmlReaderSettings() { ConformanceLevel = ConformanceLevel.Fragment });
         }
     }
 }

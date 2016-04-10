@@ -83,10 +83,6 @@ namespace System.Data.SqlClient
         private CancellationTokenSource _cancelAsyncOnCloseTokenSource;
         private CancellationToken _cancelAsyncOnCloseToken;
 
-        // Used for checking if the Type parameter provided to GetValue<T> is an INullable
-        internal static readonly Type _typeofINullable = typeof(INullable);
-        private static readonly Type s_typeofSqlString = typeof(SqlString);
-
         private SqlSequentialStream _currentStream;
         private SqlSequentialTextReader _currentTextReader;
 
@@ -2276,26 +2272,42 @@ namespace System.Data.SqlClient
         private T GetFieldValueFromSqlBufferInternal<T>(SqlBuffer data, _SqlMetaData metaData)
         {
             Type typeofT = typeof(T);
-            if (_typeofINullable.IsAssignableFrom(typeofT))
+            if ((typeof(T) == typeof(INullable)) ||
+                (typeof(T) == typeof(SqlBinary)) ||
+                (typeof(T) == typeof(SqlBoolean)) ||
+                (typeof(T) == typeof(SqlByte)) ||
+                (typeof(T) == typeof(SqlBytes)) ||
+                (typeof(T) == typeof(SqlChars)) ||
+                (typeof(T) == typeof(SqlDateTime)) ||
+                (typeof(T) == typeof(SqlDecimal)) ||
+                (typeof(T) == typeof(SqlDouble)) ||
+                (typeof(T) == typeof(SqlGuid)) ||
+                (typeof(T) == typeof(SqlInt16)) ||
+                (typeof(T) == typeof(SqlInt32)) ||
+                (typeof(T) == typeof(SqlInt64)) ||
+                (typeof(T) == typeof(SqlMoney)) ||
+                (typeof(T) == typeof(SqlSingle)) ||
+                (typeof(T) == typeof(SqlXml)))
             {
-                // If its a SQL Type or Nullable UDT
+                // If its a SQL Type
+                return (T)GetSqlValueFromSqlBufferInternal(data, metaData);
+            }
+            else if (typeof(T) == typeof(SqlString))
+            {
                 object rawValue = GetSqlValueFromSqlBufferInternal(data, metaData);
 
                 // Special case: User wants SqlString, but we have a SqlXml
                 // SqlXml can not be typecast into a SqlString, but we need to support SqlString on XML Types - so do a manual conversion
-                if (typeofT == s_typeofSqlString)
+                SqlXml xmlValue = rawValue as SqlXml;
+                if (xmlValue != null)
                 {
-                    SqlXml xmlValue = rawValue as SqlXml;
-                    if (xmlValue != null)
+                    if (xmlValue.IsNull)
                     {
-                        if (xmlValue.IsNull)
-                        {
-                            rawValue = SqlString.Null;
-                        }
-                        else
-                        {
-                            rawValue = new SqlString(xmlValue.Value);
-                        }
+                        rawValue = SqlString.Null;
+                    }
+                    else
+                    {
+                        rawValue = new SqlString(xmlValue.Value);
                     }
                 }
 
@@ -2303,7 +2315,7 @@ namespace System.Data.SqlClient
             }
             else
             {
-                // Otherwise Its a CLR or non-Nullable UDT
+                // Otherwise Its a CLR
                 try
                 {
                     return (T)GetValueFromSqlBufferInternal(data, metaData);

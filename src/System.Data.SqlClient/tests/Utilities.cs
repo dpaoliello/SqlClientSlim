@@ -1,5 +1,7 @@
-﻿using System.Reflection;
+﻿using System.IO;
+using System.Reflection;
 using System.Threading.Tasks;
+using System.Xml;
 
 namespace System.Data.SqlClient.Tests
 {
@@ -23,5 +25,13 @@ namespace System.Data.SqlClient.Tests
             return Task.Delay(TimeSpan.FromMilliseconds(100));
         }
 #endif
+
+        /// <summary>
+        /// Creates an XmlReader for the given XML text fragment.
+        /// </summary>
+        internal static XmlReader CreateXmlReader(string xmlText)
+        {
+            return XmlReader.Create(new StringReader(xmlText), new XmlReaderSettings() { ConformanceLevel = ConformanceLevel.Fragment });
+        }
     }
 }

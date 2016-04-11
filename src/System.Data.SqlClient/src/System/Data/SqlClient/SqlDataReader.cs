@@ -46,7 +46,6 @@ namespace System.Data.SqlClient
         private int _defaultLCID;
         private bool _haltRead;               // bool to denote whether we have read first row for single row behavior
         private bool _metaDataConsumed;
-        private bool _browseModeInfoConsumed;
         private bool _isClosed;
         private bool _isInitialized;          // Webdata 104560
         private bool _hasRows;
@@ -65,12 +64,6 @@ namespace System.Data.SqlClient
         private _SqlMetaDataSetCollection _altMetaDataSetCollection;
         private FieldNameLookup _fieldNameLookup;
         private CommandBehavior _commandBehavior;
-
-        private static int s_objectTypeCount; // Bid counter
-        internal readonly int ObjectID = System.Threading.Interlocked.Increment(ref s_objectTypeCount);
-
-        // metadata (no explicit table, use 'Table')
-        private string _resetOptionsString;
 
         private int _lastColumnWithDataChunkRead;
         private long _columnDataBytesRead;       // last byte read by user
@@ -103,20 +96,11 @@ namespace System.Data.SqlClient
             _sharedState._dataReady = false;
             _metaDataConsumed = false;
             _hasRows = false;
-            _browseModeInfoConsumed = false;
             _currentStream = null;
             _currentTextReader = null;
             _cancelAsyncOnCloseTokenSource = new CancellationTokenSource();
             _cancelAsyncOnCloseToken = _cancelAsyncOnCloseTokenSource.Token;
             _columnDataCharsIndex = -1;
-        }
-
-        internal bool BrowseModeInfoConsumed
-        {
-            set
-            {
-                _browseModeInfoConsumed = value;
-            }
         }
 
         internal SqlCommand Command
@@ -325,14 +309,6 @@ namespace System.Data.SqlClient
 
                 // cached locally for after Close() when command is nulled out
                 return _recordsAffected;
-            }
-        }
-
-        internal string ResetOptionsString
-        {
-            set
-            {
-                _resetOptionsString = value;
             }
         }
 
@@ -2692,7 +2668,6 @@ namespace System.Data.SqlClient
                     if (moreResults)
                     {
                         _metaDataConsumed = false;
-                        _browseModeInfoConsumed = false;
 
                         switch (_altRowStatus)
                         {
@@ -3294,19 +3269,19 @@ namespace System.Data.SqlClient
         private void RestoreServerSettings(TdsParser parser, TdsParserStateObject stateObj)
         {
             // turn off any set options
-            if (null != parser && null != _resetOptionsString)
+            string resetOptionsString = SqlCommand.GetResetOptionsString(_commandBehavior);
+            if (null != parser && null != resetOptionsString)
             {
                 // It is possible for this to be called during connection close on a
                 // broken connection, so check state first.
                 if (parser.State == TdsParserState.OpenLoggedIn)
                 {
-                    Task executeTask = parser.TdsExecuteSQLBatch(_resetOptionsString, (_command != null) ? _command.CommandTimeout : 0, stateObj, sync: true);
+                    Task executeTask = parser.TdsExecuteSQLBatch(resetOptionsString, (_command != null) ? _command.CommandTimeout : 0, stateObj, sync: true);
                     Debug.Assert(executeTask == null, "Shouldn't get a task when doing sync writes");
 
                     // must execute this one synchronously as we can't retry
                     parser.Run(RunBehavior.UntilDone, _command, this, null, stateObj);
                 }
-                _resetOptionsString = null;
             }
         }
 
@@ -3378,7 +3353,6 @@ namespace System.Data.SqlClient
             _metaData = null;
             _fieldNameLookup = null;
             _metaDataConsumed = false;
-            _browseModeInfoConsumed = false;
         }
 
         internal bool TrySetMetaData(_SqlMetaDataSet metaData, bool moreInfo)
@@ -3459,7 +3433,6 @@ namespace System.Data.SqlClient
                 _metaDataConsumed = false;
             }
 
-            _browseModeInfoConsumed = false;
             return true;
         }
 
@@ -4307,7 +4280,6 @@ namespace System.Data.SqlClient
             public bool _dataReady;
             public bool _haltRead;
             public bool _metaDataConsumed;
-            public bool _browseModeInfoConsumed;
             public bool _hasRows;
             public ALTROWSTATUS _altRowStatus;
             public int _nextColumnDataToRead;
@@ -4478,7 +4450,6 @@ namespace System.Data.SqlClient
                         _dataReady = _sharedState._dataReady,
                         _haltRead = _haltRead,
                         _metaDataConsumed = _metaDataConsumed,
-                        _browseModeInfoConsumed = _browseModeInfoConsumed,
                         _hasRows = _hasRows,
                         _altRowStatus = _altRowStatus,
                         _nextColumnDataToRead = _sharedState._nextColumnDataToRead,
@@ -4558,7 +4529,6 @@ namespace System.Data.SqlClient
                 _sharedState._dataReady = _snapshot._dataReady;
                 _haltRead = _snapshot._haltRead;
                 _metaDataConsumed = _snapshot._metaDataConsumed;
-                _browseModeInfoConsumed = _snapshot._browseModeInfoConsumed;
                 _hasRows = _snapshot._hasRows;
                 _altRowStatus = _snapshot._altRowStatus;
                 _sharedState._nextColumnDataToRead = _snapshot._nextColumnDataToRead;

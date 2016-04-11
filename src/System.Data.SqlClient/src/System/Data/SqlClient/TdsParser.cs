@@ -1676,7 +1676,6 @@ namespace System.Data.SqlClient
                                 {
                                     return false;
                                 }
-                                dataStream.BrowseModeInfoConsumed = true;
                             }
                             else
                             { // no dataStream

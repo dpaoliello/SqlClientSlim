@@ -69,7 +69,6 @@ namespace System.Data.SqlClient
             private SqlConnection _cachedAsyncConnection = null;  // Used to validate that the connection hasn't changed when end the connection;
             private SqlDataReader _cachedAsyncReader = null;
             private RunBehavior _cachedRunBehavior = RunBehavior.ReturnImmediately;
-            private string _cachedSetOptions = null;
             private string _cachedEndMethod = null;
 
             internal CachedAsyncState()
@@ -83,10 +82,6 @@ namespace System.Data.SqlClient
             internal RunBehavior CachedRunBehavior
             {
                 get { return _cachedRunBehavior; }
-            }
-            internal string CachedSetOptions
-            {
-                get { return _cachedSetOptions; }
             }
             internal bool PendingAsyncOperation
             {
@@ -113,7 +108,6 @@ namespace System.Data.SqlClient
                 }
                 _cachedAsyncReader = null;
                 _cachedRunBehavior = RunBehavior.ReturnImmediately;
-                _cachedSetOptions = null;
                 _cachedEndMethod = null;
             }
 
@@ -140,11 +134,10 @@ namespace System.Data.SqlClient
                 _cachedEndMethod = endMethod;
             }
 
-            internal void SetAsyncReaderState(SqlDataReader ds, RunBehavior runBehavior, string optionSettings)
+            internal void SetAsyncReaderState(SqlDataReader ds, RunBehavior runBehavior)
             {
                 _cachedAsyncReader = ds;
                 _cachedRunBehavior = runBehavior;
-                _cachedSetOptions = optionSettings;
             }
         }
 
@@ -2022,7 +2015,7 @@ namespace System.Data.SqlClient
                         task = AsyncHelper.CreateContinuationTask(writeTask, () =>
                         {
                             _activeConnection.GetOpenTdsConnection(); // it will throw if connection is closed
-                            cachedAsyncState.SetAsyncReaderState(ds, runBehavior, optionSettings);
+                            cachedAsyncState.SetAsyncReaderState(ds, runBehavior);
                         },
                                  onFailure: (exc) =>
                                  {
@@ -2031,13 +2024,13 @@ namespace System.Data.SqlClient
                     }
                     else
                     {
-                        cachedAsyncState.SetAsyncReaderState(ds, runBehavior, optionSettings);
+                        cachedAsyncState.SetAsyncReaderState(ds, runBehavior);
                     }
                 }
                 else
                 {
                     // Always execute - even if no reader!
-                    FinishExecuteReader(ds, runBehavior, optionSettings);
+                    FinishExecuteReader(ds, runBehavior);
                 }
             }
             catch (Exception e)
@@ -2073,7 +2066,7 @@ namespace System.Data.SqlClient
             bool processFinallyBlock = true;
             try
             {
-                FinishExecuteReader(ds, cachedAsyncState.CachedRunBehavior, cachedAsyncState.CachedSetOptions);
+                FinishExecuteReader(ds, cachedAsyncState.CachedRunBehavior);
             }
             catch (Exception e)
             {
@@ -2092,7 +2085,7 @@ namespace System.Data.SqlClient
             return ds;
         }
 
-        private void FinishExecuteReader(SqlDataReader ds, RunBehavior runBehavior, string resetOptionsString)
+        private void FinishExecuteReader(SqlDataReader ds, RunBehavior runBehavior)
         {
             // always wrap with a try { FinishExecuteReader(...) } finally { PutStateObject(); }
 
@@ -2133,7 +2126,6 @@ namespace System.Data.SqlClient
             {
                 ds.Bind(_stateObj);
                 _stateObj = null;   // the reader now owns this...
-                ds.ResetOptionsString = resetOptionsString;
                 // bind this reader to this connection now
                 _activeConnection.AddWeakReference(ds, SqlReferenceCollection.DataReaderTag);
 
@@ -2875,18 +2867,18 @@ namespace System.Data.SqlClient
             return s;
         }
 
-        private string GetResetOptionsString(CommandBehavior behavior)
+        internal static string GetResetOptionsString(CommandBehavior behavior)
         {
             string s = null;
 
             // SET FMTONLY ON OFF
-            if (System.Data.CommandBehavior.SchemaOnly == (behavior & CommandBehavior.SchemaOnly))
+            if (CommandBehavior.SchemaOnly == (behavior & CommandBehavior.SchemaOnly))
             {
                 s = s + TdsEnums.FMTONLY_OFF;
             }
 
             // SET NO_BROWSETABLE OFF
-            if (System.Data.CommandBehavior.KeyInfo == (behavior & CommandBehavior.KeyInfo))
+            if (CommandBehavior.KeyInfo == (behavior & CommandBehavior.KeyInfo))
             {
                 s = s + TdsEnums.BROWSE_OFF;
             }

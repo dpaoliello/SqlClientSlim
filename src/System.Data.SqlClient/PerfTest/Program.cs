@@ -6,7 +6,7 @@ namespace PerfTest
     {
         static void Main(string[] args)
         {
-            Engine perfEngine = new Engine(threadCount: 4);
+            Engine perfEngine = new Engine(threadCount: 2);
 
             RunSlimAndFull(perfEngine, SqlClientSlimTests.OpenPooledConnectionTest, SqlClientFullTests.OpenPooledConnectionTest, "CreateConnectionTest", TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(15));
             RunSlimAndFull(perfEngine, SqlClientSlimTests.SelectOneTest, SqlClientFullTests.SelectOneTest, "SelectOneTest", TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(15));

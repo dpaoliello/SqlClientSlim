@@ -1,5 +1,6 @@
-﻿// Copyright (c) Microsoft. All rights reserved.
-// Licensed under the MIT license. See LICENSE file in the project root for full license information.
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+// See the LICENSE file in the project root for more information.
 
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -419,10 +420,11 @@ namespace System.Data.SqlClient.SNI
         /// Receive a packet synchronously
         /// </summary>
         /// <param name="packet">SNI packet</param>
-        /// <param name="timeout">Timeout</param>
+        /// <param name="timeoutInMilliseconds">Timeout in Milliseconds</param>
         /// <returns>SNI error code</returns>
         public override SNIError Receive(ref SNIPacket packet, int timeout)
         {
+            packet = null;
             int queueCount;
             uint result = TdsEnums.SNI_SUCCESS_IO_PENDING;
 
@@ -460,9 +462,9 @@ namespace System.Data.SqlClient.SNI
                     return SendAckIfNecessary();
                 }
 
-                if (!_packetEvent.Wait(timeout))
+                if (!_packetEvent.Wait(timeoutInMilliseconds))
                 {
-                    return new SNIError(SNIProviders.TCP_PROV, 0, 0, "Timeout error");
+                    return new SNIError(SNIProviders.SMUX_PROV, 0, SNICommon.ConnTimeoutError, string.Empty);
                 }
             }
         }
@@ -483,6 +485,14 @@ namespace System.Data.SqlClient.SNI
         /// <param name="receiveCallback">Receive callback</param>
         /// <param name="sendCallback">Send callback</param>
         public override void SetAsyncCallbacks(SNIAsyncCallback receiveCallback, SNIAsyncCallback sendCallback)
+        {
+        }
+
+        /// <summary>
+        /// Set buffer size
+        /// </summary>
+        /// <param name="bufferSize">Buffer size</param>
+        public override void SetBufferSize(int bufferSize)
         {
         }
 

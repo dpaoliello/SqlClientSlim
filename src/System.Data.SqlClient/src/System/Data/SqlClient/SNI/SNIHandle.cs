@@ -1,5 +1,6 @@
-﻿// Copyright (c) Microsoft. All rights reserved.
-// Licensed under the MIT license. See LICENSE file in the project root for full license information.
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+// See the LICENSE file in the project root for more information.
 
 namespace System.Data.SqlClient.SNI
 {
@@ -21,6 +22,12 @@ namespace System.Data.SqlClient.SNI
         public abstract void SetAsyncCallbacks(SNIAsyncCallback receiveCallback, SNIAsyncCallback sendCallback);
 
         /// <summary>
+        /// Set buffer size
+        /// </summary>
+        /// <param name="bufferSize">Buffer size</param>
+        public abstract void SetBufferSize(int bufferSize);
+
+        /// <summary>
         /// Send a packet synchronously
         /// </summary>
         /// <param name="packet">SNI packet</param>
@@ -39,7 +46,7 @@ namespace System.Data.SqlClient.SNI
         /// Receive a packet synchronously
         /// </summary>
         /// <param name="packet">SNI packet</param>
-        /// <param name="timeout">Timeout</param>
+        /// <param name="timeoutInMilliseconds">Timeout in Milliseconds</param>
         /// <returns>SNI error code</returns>
         public abstract SNIError Receive(ref SNIPacket packet, int timeout);
 

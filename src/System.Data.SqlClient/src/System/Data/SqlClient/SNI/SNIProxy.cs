@@ -1,5 +1,6 @@
-﻿// Copyright (c) Microsoft. All rights reserved.
-// Licensed under the MIT license. See LICENSE file in the project root for full license information.
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+// See the LICENSE file in the project root for more information.
 
 namespace System.Data.SqlClient.SNI
 {
@@ -33,7 +34,7 @@ namespace System.Data.SqlClient.SNI
             }
             catch (Exception e)
             {
-                return new SNIError(SNIProviders.TCP_PROV, 0, 0, string.Format("Encryption(ssl/tls) handshake failed: {0}", e.ToString()));
+                return new SNIError(SNIProviders.SSL_PROV, SNICommon.HandshakeFailureError, e);
             }
         }
 
@@ -79,11 +80,7 @@ namespace System.Data.SqlClient.SNI
         /// <returns>SNI error code</returns>
         public uint SetConnectionBufferSize(SNIHandle handle, uint bufferSize)
         {
-            if (handle is SNITCPHandle)
-            {
-                (handle as SNITCPHandle).SetBufferSize((int)bufferSize);
-            }
-
+            handle.SetBufferSize((int)bufferSize);
             return TdsEnums.SNI_SUCCESS;
         }
 
@@ -112,7 +109,7 @@ namespace System.Data.SqlClient.SNI
         /// <returns>SNI error status</returns>
         public SNIError ReadSyncOverAsync(SNIHandle handle, ref SNIPacket packet, int timeout)
         {
-            return handle.Receive(ref packet, timeout);
+            return handle.Receive(out packet, timeout);
         }
 
         /// <summary>
@@ -179,35 +176,46 @@ namespace System.Data.SqlClient.SNI
 
             if (serverNameParts.Length > 2)
             {
-                sniError = new SNIError(SNIProviders.INVALID_PROV, 0, 0, "Connection string is not formatted correctly");
+                sniError = new SNIError(SNIProviders.INVALID_PROV, 0, SNICommon.InvalidConnStringError, string.Empty);
                 return null;
             }
 
             // Default to using tcp if no protocol is provided
             if (serverNameParts.Length == 1)
             {
-                return ConstructTcpHandle(serverNameParts[0], timerExpire, callbackObject, out sniError);
+                return CreateTcpHandle(serverNameParts[0], timerExpire, callbackObject, parallel, out sniError);
             }
 
             switch (serverNameParts[0])
             {
                 case TdsEnums.TCP:
-                    return ConstructTcpHandle(serverNameParts[1], timerExpire, callbackObject, out sniError);
+                    return CreateTcpHandle(serverNameParts[1], timerExpire, callbackObject, parallel);
+
+                case TdsEnums.NP:
+                    return CreateNpHandle(serverNameParts[1], timerExpire, callbackObject, parallel);
 
                 default:
-                    sniError = new SNIError(SNIProviders.INVALID_PROV, 0, 0, string.Format("Unsupported transport protocol: '{0}'", serverNameParts[0]));
+                    if (parallel)
+                    {
+                        SNICommon.ReportSNIError(SNIProviders.INVALID_PROV, 0, SNICommon.MultiSubnetFailoverWithNonTcpProtocol, string.Empty);
+                    }
+                    else
+                    {
+                        SNICommon.ReportSNIError(SNIProviders.INVALID_PROV, 0, SNICommon.ProtocolNotSupportedError, string.Empty);
+                    }
                     return null;
             }
         }
 
         /// <summary>
-        /// Helper function to construct an SNITCPHandle object
+        /// Creates an SNITCPHandle object
         /// </summary>
         /// <param name="fullServerName">Server string. May contain a comma delimited port number.</param>
         /// <param name="timerExpire">Timer expiration</param>
         /// <param name="callbackObject">Asynchronous I/O callback object</param>
-        /// <returns></returns>
-        private SNITCPHandle ConstructTcpHandle(string fullServerName, long timerExpire, object callbackObject, out SNIError sniError)
+        /// <param name="parallel">Should MultiSubnetFailover be used</param>
+        /// <returns>SNITCPHandle</returns>
+        private SNITCPHandle CreateTcpHandle(string fullServerName, long timerExpire, object callbackObject, bool parallel, out SNIError sniError)
         {
             // TCP Format: 
             // tcp:<host name>\<instance name>
@@ -221,20 +229,73 @@ namespace System.Data.SqlClient.SNI
                 {
                     portNumber = ushort.Parse(serverAndPortParts[1]);
                 }
-                catch (Exception)
+                catch (Exception e)
                 {
-                    sniError = new SNIError(SNIProviders.TCP_PROV, 0, 0, "Port number is malformed");
+                    sniError = new SNIError(SNIProviders.TCP_PROV, SNICommon.InvalidConnStringError, e);
                     return null;
                 }
             }
             else if (serverAndPortParts.Length > 2)
             {
-                sniError = new SNIError(SNIProviders.TCP_PROV, 0, 0, "Connection string is not formatted correctly");
+                SNILoadHandle.SingletonInstance.LastError = new SNIError(SNIProviders.TCP_PROV, 0, SNICommon.InvalidConnStringError, string.Empty);
                 return null;
             }
 
-            sniError = null;
-            return new SNITCPHandle(serverAndPortParts[0], portNumber, timerExpire, callbackObject);
+            return new SNITCPHandle(serverAndPortParts[0], portNumber, timerExpire, callbackObject, parallel);
+        }
+
+        /// <summary>
+        /// Creates an SNINpHandle object
+        /// </summary>
+        /// <param name="fullServerName">Server string representing a UNC pipe path.</param>
+        /// <param name="timerExpire">Timer expiration</param>
+        /// <param name="callbackObject">Asynchronous I/O callback object</param>
+        /// <param name="parallel">Should MultiSubnetFailover be used. Only returns an error for named pipes.</param>
+        /// <returns>SNINpHandle</returns>
+        private SNINpHandle CreateNpHandle(string fullServerName, long timerExpire, object callbackObject, bool parallel)
+        {
+            if (parallel)
+            {
+                SNICommon.ReportSNIError(SNIProviders.NP_PROV, 0, SNICommon.MultiSubnetFailoverWithNonTcpProtocol, string.Empty);
+                return null;
+            }
+
+            if(fullServerName.Length == 0 || fullServerName.Contains("/")) // Pipe paths only allow back slashes
+            {
+                SNILoadHandle.SingletonInstance.LastError = new SNIError(SNIProviders.NP_PROV, 0, SNICommon.InvalidConnStringError, string.Empty);
+                return null;
+            }
+
+            string serverName, pipeName;
+            if (!fullServerName.Contains(@"\"))
+            {
+                serverName = fullServerName;
+                pipeName = SNINpHandle.DefaultPipePath;
+            }
+            else
+            {
+                try
+                {
+                    Uri pipeURI = new Uri(fullServerName);
+                    string resourcePath = pipeURI.AbsolutePath;
+
+                    string pipeToken = "/pipe/";
+                    if (!resourcePath.StartsWith(pipeToken))
+                    {
+                        SNILoadHandle.SingletonInstance.LastError = new SNIError(SNIProviders.NP_PROV, 0, SNICommon.InvalidConnStringError, string.Empty);
+                        return null;
+                    }
+                    pipeName = resourcePath.Substring(pipeToken.Length);
+                    serverName = pipeURI.Host;
+                }
+                catch(UriFormatException)
+                {
+                    SNILoadHandle.SingletonInstance.LastError = new SNIError(SNIProviders.NP_PROV, 0, SNICommon.InvalidConnStringError, string.Empty);
+                    return null;
+                }
+            }
+
+            return new SNINpHandle(serverName, pipeName, timerExpire, callbackObject);
         }
 
         /// <summary>

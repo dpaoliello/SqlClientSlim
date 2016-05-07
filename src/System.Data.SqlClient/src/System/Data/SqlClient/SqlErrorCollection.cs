@@ -1,13 +1,9 @@
-// Copyright (c) Microsoft. All rights reserved.
-// Licensed under the MIT license. See LICENSE file in the project root for full license information.
-
-
-
-//------------------------------------------------------------------------------
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+// See the LICENSE file in the project root for more information.
 
 using System.Collections;
 using System.Collections.Generic;
-
 
 namespace System.Data.SqlClient
 {
@@ -24,38 +20,17 @@ namespace System.Data.SqlClient
             _errors.CopyTo((SqlError[])array, index);
         }
 
-        public void CopyTo(SqlError[] array, int index)
-        {
-            _errors.CopyTo(array, index);
-        }
+        public void CopyTo(SqlError[] array, int index) => _errors.CopyTo(array, index);
 
-        public int Count
-        {
-            get { return _errors.Count; }
-        }
+        public int Count => _errors.Count;
 
-        object System.Collections.ICollection.SyncRoot
-        {
-            get { return this; }
-        }
+        object ICollection.SyncRoot => this;
 
-        bool System.Collections.ICollection.IsSynchronized
-        {
-            get { return false; }
-        }
+        bool ICollection.IsSynchronized => false;
 
-        public SqlError this[int index]
-        {
-            get
-            {
-                return (SqlError)_errors[index];
-            }
-        }
+        public SqlError this[int index] => (SqlError)_errors[index];
 
-        public IEnumerator GetEnumerator()
-        {
-            return _errors.GetEnumerator();
-        }
+        public IEnumerator GetEnumerator() => _errors.GetEnumerator();
 
         internal void Add(SqlError error)
         {

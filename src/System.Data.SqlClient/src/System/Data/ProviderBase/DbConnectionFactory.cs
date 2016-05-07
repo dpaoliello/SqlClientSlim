@@ -1,5 +1,6 @@
-// Copyright (c) Microsoft. All rights reserved.
-// Licensed under the MIT license. See LICENSE file in the project root for full license information.
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+// See the LICENSE file in the project root for more information.
 
 
 
@@ -27,7 +28,7 @@ namespace System.Data.ProviderBase
 
         // s_pendingOpenNonPooled is an array of tasks used to throttle creation of non-pooled connections to 
         // a maximum of Environment.ProcessorCount at a time.
-        private static int s_pendingOpenNonPooledNext = 0;
+        private static uint s_pendingOpenNonPooledNext = 0;
         private static Task<DbConnectionInternal>[] s_pendingOpenNonPooled = new Task<DbConnectionInternal>[Environment.ProcessorCount];
         private static Task<DbConnectionInternal> s_completedTask;
 
@@ -61,7 +62,7 @@ namespace System.Data.ProviderBase
 
         public void ClearPool(DbConnection connection)
         {
-            ADP.CheckArgumentNull(connection, "connection");
+            ADP.CheckArgumentNull(connection, nameof(connection));
 
             DbConnectionPoolGroup poolGroup = GetConnectionPoolGroup(connection);
             if (null != poolGroup)
@@ -72,7 +73,8 @@ namespace System.Data.ProviderBase
 
         public void ClearPool(DbConnectionPoolKey key)
         {
-            ADP.CheckArgumentNull(key.ConnectionString, "key.ConnectionString");
+            Debug.Assert(key != null, "key cannot be null");
+            ADP.CheckArgumentNull(key.ConnectionString, nameof(key) + "." + nameof(key.ConnectionString));
 
             DbConnectionPoolGroup poolGroup;
             Dictionary<DbConnectionPoolKey, DbConnectionPoolGroup> connectionPoolGroups = _connectionPoolGroups;
@@ -131,7 +133,8 @@ namespace System.Data.ProviderBase
 
         protected DbConnectionOptions FindConnectionOptions(DbConnectionPoolKey key)
         {
-            if (!ADP.IsEmpty(key.ConnectionString))
+            Debug.Assert(key != null, "key cannot be null");
+            if (!string.IsNullOrEmpty(key.ConnectionString))
             {
                 DbConnectionPoolGroup connectionPoolGroup;
                 Dictionary<DbConnectionPoolKey, DbConnectionPoolGroup> connectionPoolGroups = _connectionPoolGroups;
@@ -143,14 +146,10 @@ namespace System.Data.ProviderBase
             return null;
         }
 
-        // GetCompletedTask must be called from within s_pendingOpenPooled lock
         private static Task<DbConnectionInternal> GetCompletedTask()
         {
-            if (s_completedTask == null)
-            {
-                s_completedTask = Task.FromResult<DbConnectionInternal>(null);
-            }
-            return s_completedTask;
+            Debug.Assert(Monitor.IsEntered(s_pendingOpenNonPooled), $"Expected {nameof(s_pendingOpenNonPooled)} lock to be held.");
+            return s_completedTask ?? (s_completedTask = Task.FromResult<DbConnectionInternal>(null));
         }
 
         internal bool TryGetConnection(DbConnection owningConnection, bool isAsync, DbConnectionOptions userOptions, DbConnectionInternal oldConnection, ref TaskCompletionSource<DbConnectionInternal> completionSource, out DbConnectionInternal connection)
@@ -165,7 +164,7 @@ namespace System.Data.ProviderBase
             //  and GetConnection on the pool checking the pool state.  Clearing the pool in this window
             //  will switch the pool into the ShuttingDown state, and GetConnection will return null.
             //  There is probably a better solution involving locking the pool/group, but that entails a major
-            //  re-design of the connection pooling synchronization, so is post-poned for now.
+            //  re-design of the connection pooling synchronization, so is postponed for now.
 
             // Use retriesLeft to prevent CPU spikes with incremental sleep
             // start with one msec, double the time every retry
@@ -207,14 +206,18 @@ namespace System.Data.ProviderBase
                                 }
                             }
 
-                            // if didn't find one, pick the next one in round-robbin fashion
+                            // if didn't find one, pick the next one in round-robin fashion
                             if (idx == s_pendingOpenNonPooled.Length)
                             {
-                                idx = s_pendingOpenNonPooledNext++ % s_pendingOpenNonPooled.Length;
+                                idx = (int)(s_pendingOpenNonPooledNext % s_pendingOpenNonPooled.Length);
+                                unchecked
+                                {
+                                    s_pendingOpenNonPooledNext++;
+                                }
                             }
 
                             // now that we have an antecedent task, schedule our work when it is completed.
-                            // If it is a new slot or a compelted task, this continuation will start right away.
+                            // If it is a new slot or a completed task, this continuation will start right away.
                             newTask = s_pendingOpenNonPooled[idx].ContinueWith((_) =>
                             {
                                 var newConnection = CreateNonPooledConnection(owningConnection, poolGroup, userOptions);
@@ -348,7 +351,7 @@ namespace System.Data.ProviderBase
 
         internal DbConnectionPoolGroup GetConnectionPoolGroup(DbConnectionPoolKey key, DbConnectionPoolGroupOptions poolOptions, ref DbConnectionOptions userConnectionOptions)
         {
-            if (ADP.IsEmpty(key.ConnectionString))
+            if (string.IsNullOrEmpty(key.ConnectionString))
             {
                 return (DbConnectionPoolGroup)null;
             }

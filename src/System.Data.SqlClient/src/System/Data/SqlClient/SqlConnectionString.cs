@@ -132,7 +132,7 @@ namespace System.Data.SqlClient
         internal const int DeprecatedSynonymCount = 3;
 
 
-        internal enum TypeSystem
+        internal enum TypeSystem : short
         {
             Latest = 2008,
             SQLServer2000 = 2000,

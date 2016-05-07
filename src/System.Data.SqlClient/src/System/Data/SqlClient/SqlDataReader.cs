@@ -22,7 +22,7 @@ namespace System.Data.SqlClient
 {
     public class SqlDataReader : DbDataReader
     {
-        private enum ALTROWSTATUS
+        private enum ALTROWSTATUS : byte
         {
             Null = 0,           // default and after Done
             AltRow,             // after calling NextResult and the first AltRow is available for read
@@ -73,8 +73,7 @@ namespace System.Data.SqlClient
 
         private Task _currentTask;
         private Snapshot _snapshot;
-        private CancellationTokenSource _cancelAsyncOnCloseTokenSource;
-        private CancellationToken _cancelAsyncOnCloseToken;
+        private byte _closeStarted;
 
         private SqlSequentialStream _currentStream;
         private SqlSequentialTextReader _currentTextReader;
@@ -98,8 +97,7 @@ namespace System.Data.SqlClient
             _hasRows = false;
             _currentStream = null;
             _currentTextReader = null;
-            _cancelAsyncOnCloseTokenSource = new CancellationTokenSource();
-            _cancelAsyncOnCloseToken = _cancelAsyncOnCloseTokenSource.Token;
+            _closeStarted = 0;
             _columnDataCharsIndex = -1;
         }
 
@@ -355,6 +353,19 @@ namespace System.Data.SqlClient
             }
         }
 
+        private bool HasCloseStarted
+        {
+            get
+            {
+                return (Volatile.Read(ref _closeStarted) != 0);
+            }
+            set
+            {
+                Debug.Assert(value == true, "Can only set HasCloseStarted to true");
+                Volatile.Write(ref _closeStarted, 1);
+            }
+        }
+
         internal void Bind(TdsParserStateObject stateObj)
         {
             Debug.Assert(null != stateObj, "null stateobject");
@@ -474,7 +485,7 @@ namespace System.Data.SqlClient
                 TdsParserStateObject stateObj = _stateObj;
 
                 // Request that the current task is stopped
-                _cancelAsyncOnCloseTokenSource.Cancel();
+                HasCloseStarted = true;
                 var currentTask = _currentTask;
                 if ((currentTask != null) && (!currentTask.IsCompleted))
                 {
@@ -718,7 +729,7 @@ namespace System.Data.SqlClient
                 var stateObj = _stateObj;
                 _isClosed = true;
                 // Request that the current task is stopped
-                _cancelAsyncOnCloseTokenSource.Cancel();
+                HasCloseStarted = true;
                 if (stateObj != null)
                 {
                     var networkPacketTaskSource = stateObj._networkPacketTaskSource;
@@ -2991,11 +3002,14 @@ namespace System.Data.SqlClient
         {
             AssertReaderState(requireData: true, permitAsync: true, columnIndex: i);
 
+            int nextColumnHeaderToRead = _sharedState._nextColumnHeaderToRead;
+            int nextColumnDataToRead = _sharedState._nextColumnDataToRead;
+
             // Check if we've already read the header already
-            if (i < _sharedState._nextColumnHeaderToRead)
+            if (i < nextColumnHeaderToRead)
             {
                 // Read the header, but we need to read the data
-                if ((i == _sharedState._nextColumnDataToRead) && (!readHeaderOnly))
+                if ((i == nextColumnDataToRead) && (!readHeaderOnly))
                 {
                     return TryReadColumnData();
                 }
@@ -3003,10 +3017,10 @@ namespace System.Data.SqlClient
                 else
                 {
                     // Ensure that, if we've read past the column, then we did store its data
-                    Debug.Assert(i == _sharedState._nextColumnDataToRead ||                                                          // Either we haven't read the column yet
-                        ((i + 1 < _sharedState._nextColumnDataToRead) && (IsCommandBehavior(CommandBehavior.SequentialAccess))) ||   // Or we're in sequential mode and we've read way past the column (i.e. it was not the last column we read)
-                        (!_data[i].IsEmpty || _data[i].IsNull) ||                                                       // Or we should have data stored for the column (unless the column was null)
-                        (_metaData[i].type == SqlDbType.Timestamp),                                                     // Or SqlClient: IsDBNull always returns false for timestamp datatype
+                    Debug.Assert(i == nextColumnDataToRead ||                                                          // Either we haven't read the column yet
+                        ((i + 1 < nextColumnDataToRead) && (IsCommandBehavior(CommandBehavior.SequentialAccess))) ||   // Or we're in sequential mode and we've read way past the column (i.e. it was not the last column we read)
+                        (!_data[i].IsEmpty || _data[i].IsNull) ||                                                      // Or we should have data stored for the column (unless the column was null)
+                        (_metaData[i].type == SqlDbType.Timestamp),                                                    // Or SqlClient: IsDBNull always returns false for timestamp datatype
 
                         "Gone past column, be we have no data stored for it");
                     return true;
@@ -3020,9 +3034,9 @@ namespace System.Data.SqlClient
             bool isSequentialAccess = IsCommandBehavior(CommandBehavior.SequentialAccess);
             if (isSequentialAccess)
             {
-                if (0 < _sharedState._nextColumnDataToRead)
+                if (0 < nextColumnDataToRead)
                 {
-                    _data[_sharedState._nextColumnDataToRead - 1].Clear();
+                    _data[nextColumnDataToRead - 1].Clear();
                 }
 
                 // Only wipe out the blob objects if they aren't for a 'future' column (i.e. we haven't read up to them yet)
@@ -3031,14 +3045,14 @@ namespace System.Data.SqlClient
                     CloseActiveSequentialStreamAndTextReader();
                 }
             }
-            else if (_sharedState._nextColumnDataToRead < _sharedState._nextColumnHeaderToRead)
+            else if (nextColumnDataToRead < nextColumnHeaderToRead)
             {
                 // We read the header but not the column for the previous column
                 if (!TryReadColumnData())
                 {
                     return false;
                 }
-                Debug.Assert(_sharedState._nextColumnDataToRead == _sharedState._nextColumnHeaderToRead);
+                Debug.Assert(nextColumnDataToRead == nextColumnHeaderToRead);
             }
 
             // if we still have bytes left from the previous blob read, clear the wire and reset
@@ -3049,52 +3063,57 @@ namespace System.Data.SqlClient
 
             do
             {
-                _SqlMetaData columnMetaData = _metaData[_sharedState._nextColumnHeaderToRead];
+                _SqlMetaData columnMetaData = _metaData[nextColumnHeaderToRead];
 
-                if ((isSequentialAccess) && (_sharedState._nextColumnHeaderToRead < i))
+                if ((isSequentialAccess) && (nextColumnHeaderToRead < i))
                 {
                     // SkipValue is no-op if the column appears in NBC bitmask
                     // if not, it skips regular and PLP types
-                    if (!_parser.TrySkipValue(columnMetaData, _sharedState._nextColumnHeaderToRead, _stateObj))
+                    if (!_parser.TrySkipValue(columnMetaData, nextColumnHeaderToRead, _stateObj))
                     {
                         return false;
                     }
 
-                    _sharedState._nextColumnDataToRead = _sharedState._nextColumnHeaderToRead;
-                    _sharedState._nextColumnHeaderToRead++;
+                    nextColumnDataToRead = nextColumnHeaderToRead;
+                    _sharedState._nextColumnDataToRead = nextColumnDataToRead;
+                    nextColumnHeaderToRead++;
+                    _sharedState._nextColumnHeaderToRead = nextColumnHeaderToRead;
                 }
                 else
                 {
-                    bool isNull;
-                    ulong dataLength;
-                    if (!_parser.TryProcessColumnHeader(columnMetaData, _stateObj, _sharedState._nextColumnHeaderToRead, out isNull, out dataLength))
+                    ulong? dataLength;
+                    if (!_parser.TryProcessColumnHeader(columnMetaData, _stateObj, nextColumnHeaderToRead, out dataLength))
                     {
                         return false;
                     }
 
-                    _sharedState._nextColumnDataToRead = _sharedState._nextColumnHeaderToRead;
-                    _sharedState._nextColumnHeaderToRead++;  // We read this one
-                    if (isNull && columnMetaData.type != SqlDbType.Timestamp)
+                    nextColumnDataToRead = nextColumnHeaderToRead;
+                    _sharedState._nextColumnDataToRead = nextColumnDataToRead;
+                    nextColumnHeaderToRead++;
+                    _sharedState._nextColumnHeaderToRead = nextColumnHeaderToRead;  // We read this one
+                    if (!dataLength.HasValue && columnMetaData.type != SqlDbType.Timestamp)
                     {
-                        _parser.GetNullSqlValue(_data[_sharedState._nextColumnDataToRead], columnMetaData);
+                        _parser.GetNullSqlValue(_data[nextColumnDataToRead], columnMetaData);
 
                         if (!readHeaderOnly)
                         {
-                            _sharedState._nextColumnDataToRead++;
+                            nextColumnDataToRead++;
+                            _sharedState._nextColumnDataToRead = nextColumnDataToRead;
                         }
                     }
                     else
                     {
-                        if ((i > _sharedState._nextColumnDataToRead) || (!readHeaderOnly))
+                        if ((i > nextColumnDataToRead) || (!readHeaderOnly))
                         {
                             // If we're not in sequential access mode, we have to
                             // save the data we skip over so that the consumer
                             // can read it out of order
-                            if (!_parser.TryReadSqlValue(_data[_sharedState._nextColumnDataToRead], columnMetaData, (int)dataLength, _stateObj))
+                            if (!_parser.TryReadSqlValue(_data[nextColumnDataToRead], columnMetaData, (int)dataLength, _stateObj))
                             { // will read UDTs as VARBINARY.
                                 return false;
                             }
-                            _sharedState._nextColumnDataToRead++;
+                            nextColumnDataToRead++;
+                            _sharedState._nextColumnDataToRead = nextColumnDataToRead;
                         }
                         else
                         {
@@ -3110,8 +3129,10 @@ namespace System.Data.SqlClient
                     _snapshot = null;
                     PrepareAsyncInvocation(useSnapshot: true);
                 }
-            } while (_sharedState._nextColumnHeaderToRead <= i);
+            } while (nextColumnHeaderToRead <= i);
 
+            Debug.Assert(nextColumnHeaderToRead == _sharedState._nextColumnHeaderToRead);
+            Debug.Assert(nextColumnDataToRead == _sharedState._nextColumnDataToRead);
             return true;
         }
 
@@ -3595,7 +3616,7 @@ namespace System.Data.SqlClient
             }
 
             // Check if cancellation due to close is requested (this needs to be done after setting _currentTask)
-            if (_cancelAsyncOnCloseToken.IsCancellationRequested)
+            if (HasCloseStarted)
             {
                 source.SetCanceled();
                 _currentTask = null;
@@ -3777,7 +3798,7 @@ namespace System.Data.SqlClient
                     }
 
                     // Check if cancellation due to close is requested (this needs to be done after setting _currentTask)
-                    if (_cancelAsyncOnCloseToken.IsCancellationRequested)
+                    if (HasCloseStarted)
                     {
                         source.SetCanceled();
                         _currentTask = null;
@@ -3913,7 +3934,7 @@ namespace System.Data.SqlClient
                                 else if (WillHaveEnoughData(_metaData.Length - 1))
                                 {
                                     // Read row data
-                                    result = TryReadColumn(_metaData.Length - 1, setTimeout: true);
+                                    result = TryReadColumn(_metaData.Length - 1, setTimeout: false);
                                     Debug.Assert(result, "Should not have run out of data");
                                     return ADP.TrueTask;
                                 }
@@ -3951,7 +3972,7 @@ namespace System.Data.SqlClient
             }
 
             // Check if cancellation due to close is requested (this needs to be done after setting _currentTask)
-            if (_cancelAsyncOnCloseToken.IsCancellationRequested)
+            if (HasCloseStarted)
             {
                 source.SetCanceled();
                 _currentTask = null;
@@ -4090,7 +4111,7 @@ namespace System.Data.SqlClient
                 }
 
                 // Check if cancellation due to close is requested (this needs to be done after setting _currentTask)
-                if (_cancelAsyncOnCloseToken.IsCancellationRequested)
+                if (HasCloseStarted)
                 {
                     source.SetCanceled();
                     _currentTask = null;
@@ -4213,7 +4234,7 @@ namespace System.Data.SqlClient
             }
 
             // Check if cancellation due to close is requested (this needs to be done after setting _currentTask)
-            if (_cancelAsyncOnCloseToken.IsCancellationRequested)
+            if (HasCloseStarted)
             {
                 source.SetCanceled();
                 _currentTask = null;
@@ -4299,7 +4320,7 @@ namespace System.Data.SqlClient
             // _networkPacketTaskSource could be null if the connection was closed
             // while an async invocation was outstanding.
             TaskCompletionSource<object> completionSource = _stateObj._networkPacketTaskSource;
-            if (_cancelAsyncOnCloseToken.IsCancellationRequested || completionSource == null)
+            if (HasCloseStarted || completionSource == null)
             {
                 // Cancellation requested due to datareader being closed
                 TaskCompletionSource<T> source = new TaskCompletionSource<T>();
@@ -4317,7 +4338,7 @@ namespace System.Data.SqlClient
                         exceptionSource.TrySetException(retryTask.Exception.InnerException);
                         return exceptionSource.Task;
                     }
-                    else if (!_cancelAsyncOnCloseToken.IsCancellationRequested)
+                    else if (!HasCloseStarted)
                     {
                         TdsParserStateObject stateObj = _stateObj;
                         if (stateObj != null)
@@ -4486,7 +4507,7 @@ namespace System.Data.SqlClient
             {
                 // If close requested cancellation and we have a snapshot, then it will deal with cleaning up
                 // NOTE: There are some cases where we wish to ignore the close token, such as when we've read some data that is not replayable (e.g. DONE or ENV_CHANGE token)
-                if ((ignoreCloseToken) || (!_cancelAsyncOnCloseToken.IsCancellationRequested) || (stateObj._asyncReadWithoutSnapshot))
+                if ((ignoreCloseToken) || (!HasCloseStarted) || (stateObj._asyncReadWithoutSnapshot))
                 {
                     // Prevent race condition between the DataReader being closed (e.g. when another MARS thread has an error)
                     lock (stateObj)

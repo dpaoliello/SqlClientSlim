@@ -16,13 +16,13 @@ using Res = System.SR;
 
 namespace System.Data.SqlClient
 {
-    internal enum CallbackType
+    internal enum CallbackType : byte
     {
         Read = 0,
         Write = 1
     }
 
-    internal enum EncryptionOptions
+    internal enum EncryptionOptions : byte
     {
         OFF,
         ON,
@@ -31,13 +31,13 @@ namespace System.Data.SqlClient
         LOGIN
     }
 
-    internal enum PreLoginHandshakeStatus
+    internal enum PreLoginHandshakeStatus : byte
     {
         Successful,
         InstanceFailure
     }
 
-    internal enum PreLoginOptions
+    internal enum PreLoginOptions : byte
     {
         VERSION,
         ENCRYPT,
@@ -49,7 +49,7 @@ namespace System.Data.SqlClient
         LASTOPT = 255
     }
 
-    internal enum RunBehavior
+    internal enum RunBehavior : byte
     {
         UntilDone = 1, // 0001 binary
         ReturnImmediately = 2, // 0010 binary
@@ -57,7 +57,7 @@ namespace System.Data.SqlClient
         Attention = 13  // 1101 binary - Clean AND UntilDone AND Attention
     }
 
-    internal enum TdsParserState
+    internal enum TdsParserState : byte
     {
         Closed,
         OpenNotLoggedIn,
@@ -266,7 +266,7 @@ namespace System.Data.SqlClient
     sealed internal class _SqlMetaData : SqlMetaDataPriv
     {
         internal string column;
-        internal MultiPartTableName multiPartTableName;
+        internal string tableName;
         internal readonly int ordinal;
         internal byte updatability;     // two bit field (0 is read only, 1 is updatable, 2 is updatability unknown)
         internal bool isKey;
@@ -275,13 +275,6 @@ namespace System.Data.SqlClient
         internal _SqlMetaData(int ordinal) : base()
         {
             this.ordinal = ordinal;
-        }
-        internal string tableName
-        {
-            get
-            {
-                return multiPartTableName.TableName;
-            }
         }
 
         internal bool IsNewKatmaiDateTimeType
@@ -305,7 +298,7 @@ namespace System.Data.SqlClient
             _SqlMetaData result = new _SqlMetaData(ordinal);
             result.CopyFrom(this);
             result.column = column;
-            result.multiPartTableName = multiPartTableName;
+            result.tableName = tableName;
             result.updatability = updatability;
             result.isKey = isKey;
             result.isHidden = isHidden;
@@ -495,84 +488,5 @@ namespace System.Data.SqlClient
         {
             value = new SqlBuffer();
         }
-    }
-
-    internal struct MultiPartTableName
-    {
-        private string _multipartName;
-        private string _serverName;
-        private string _catalogName;
-        private string _schemaName;
-        private string _tableName;
-
-        internal MultiPartTableName(string[] parts)
-        {
-            _multipartName = null;
-            _serverName = parts[0];
-            _catalogName = parts[1];
-            _schemaName = parts[2];
-            _tableName = parts[3];
-        }
-
-        internal MultiPartTableName(string multipartName)
-        {
-            _multipartName = multipartName;
-            _serverName = null;
-            _catalogName = null;
-            _schemaName = null;
-            _tableName = null;
-        }
-
-        internal string ServerName
-        {
-            get
-            {
-                ParseMultipartName();
-                return _serverName;
-            }
-            set { _serverName = value; }
-        }
-        internal string CatalogName
-        {
-            get
-            {
-                ParseMultipartName();
-                return _catalogName;
-            }
-            set { _catalogName = value; }
-        }
-        internal string SchemaName
-        {
-            get
-            {
-                ParseMultipartName();
-                return _schemaName;
-            }
-            set { _schemaName = value; }
-        }
-        internal string TableName
-        {
-            get
-            {
-                ParseMultipartName();
-                return _tableName;
-            }
-            set { _tableName = value; }
-        }
-
-        private void ParseMultipartName()
-        {
-            if (null != _multipartName)
-            {
-                string[] parts = MultipartIdentifier.ParseMultipartIdentifier(_multipartName, "[\"", "]\"", Res.SQL_TDSParserTableName, false);
-                _serverName = parts[0];
-                _catalogName = parts[1];
-                _schemaName = parts[2];
-                _tableName = parts[3];
-                _multipartName = null;
-            }
-        }
-
-        internal static readonly MultiPartTableName Null = new MultiPartTableName(new string[] { null, null, null, null });
     }
 }

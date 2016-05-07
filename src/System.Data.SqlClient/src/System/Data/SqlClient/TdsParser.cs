@@ -3138,9 +3138,8 @@ namespace System.Data.SqlClient
             }
 
             // for now we coerce return values into a SQLVariant, not good...
-            bool isNull = false;
-            ulong valLen;
-            if (!TryProcessColumnHeaderNoNBC(rec, stateObj, out isNull, out valLen))
+            ulong? valLen;
+            if (!TryProcessColumnHeaderNoNBC(rec, stateObj, out valLen))
             {
                 return false;
             }
@@ -3155,7 +3154,7 @@ namespace System.Data.SqlClient
                 intlen = Int32.MaxValue;    // If plp data, read it all
             }
 
-            if (isNull)
+            if (!valLen.HasValue)
             {
                 GetNullSqlValue(rec.value, rec);
             }
@@ -3645,7 +3644,7 @@ namespace System.Data.SqlClient
             if (col.metaType.IsLong && !col.metaType.IsPlp)
             {
                 int unusedLen = 0xFFFF;      //We ignore this value
-                if (!TryProcessOneTable(stateObj, ref unusedLen, out col.multiPartTableName))
+                if (!TryProcessOneTable(stateObj, ref unusedLen, out col.tableName))
                 {
                     return false;
                 }
@@ -3667,15 +3666,12 @@ namespace System.Data.SqlClient
         }
 
 
-        private bool TryProcessOneTable(TdsParserStateObject stateObj, ref int length, out MultiPartTableName multiPartTableName)
+        private bool TryProcessOneTable(TdsParserStateObject stateObj, ref int length, out string tableName)
         {
             ushort tableLen;
-            MultiPartTableName mpt;
             string value;
+            tableName = null;
 
-            multiPartTableName = default(MultiPartTableName);
-
-            mpt = new MultiPartTableName();
             byte nParts;
 
             // Find out how many parts in the TDS stream
@@ -3695,7 +3691,6 @@ namespace System.Data.SqlClient
                 {
                     return false;
                 }
-                mpt.ServerName = value;
                 nParts--;
                 length -= (tableLen * 2); // wide bytes
             }
@@ -3710,7 +3705,6 @@ namespace System.Data.SqlClient
                 {
                     return false;
                 }
-                mpt.CatalogName = value;
                 length -= (tableLen * 2); // wide bytes
                 nParts--;
             }
@@ -3725,7 +3719,6 @@ namespace System.Data.SqlClient
                 {
                     return false;
                 }
-                mpt.SchemaName = value;
                 length -= (tableLen * 2); // wide bytes
                 nParts--;
             }
@@ -3740,13 +3733,12 @@ namespace System.Data.SqlClient
                 {
                     return false;
                 }
-                mpt.TableName = value;
+                tableName = value;
                 length -= (tableLen * 2); // wide bytes
                 nParts--;
             }
             Debug.Assert(nParts == 0, "ProcessTableName:Unidentified parts in the table name token stream!");
 
-            multiPartTableName = mpt;
             return true;
         }
 
@@ -3811,23 +3803,22 @@ namespace System.Data.SqlClient
         // for long columns, reads off textptrs, reads length, check nullability
         // for other columns, reads length, checks nullability
         // returns length and nullability
-        internal bool TryProcessColumnHeader(SqlMetaDataPriv col, TdsParserStateObject stateObj, int columnOrdinal, out bool isNull, out ulong length)
+        internal bool TryProcessColumnHeader(SqlMetaDataPriv col, TdsParserStateObject stateObj, int columnOrdinal, out ulong? length)
         {
             // query NBC row information first
             if (stateObj.IsNullCompressionBitSet(columnOrdinal))
             {
-                isNull = true;
-                // column information is not present in TDS if null compression bit is set, return now
-                length = 0;
+                length = null;
                 return true;
             }
 
-            return TryProcessColumnHeaderNoNBC(col, stateObj, out isNull, out length);
+            return TryProcessColumnHeaderNoNBC(col, stateObj, out length);
         }
 
-        private bool TryProcessColumnHeaderNoNBC(SqlMetaDataPriv col, TdsParserStateObject stateObj, out bool isNull, out ulong length)
+        private bool TryProcessColumnHeaderNoNBC(SqlMetaDataPriv col, TdsParserStateObject stateObj, out ulong? length)
         {
-            if (col.metaType.IsLong && !col.metaType.IsPlp)
+            bool isPlp = col.metaType.IsPlp;
+            if (col.metaType.IsLong && !isPlp)
             {
                 //
                 // we don't care about TextPtrs, simply go after the data after it
@@ -3835,7 +3826,6 @@ namespace System.Data.SqlClient
                 byte textPtrLen;
                 if (!stateObj.TryReadByte(out textPtrLen))
                 {
-                    isNull = false;
                     length = 0;
                     return false;
                 }
@@ -3845,7 +3835,6 @@ namespace System.Data.SqlClient
                     // read past text pointer
                     if (!stateObj.TrySkipBytes(textPtrLen))
                     {
-                        isNull = false;
                         length = 0;
                         return false;
                     }
@@ -3853,33 +3842,55 @@ namespace System.Data.SqlClient
                     // read past timestamp
                     if (!stateObj.TrySkipBytes(TdsEnums.TEXT_TIME_STAMP_LEN))
                     {
-                        isNull = false;
                         length = 0;
                         return false;
                     }
 
-                    isNull = false;
-                    return TryGetDataLength(col, stateObj, out length);
+                    int intLength;
+                    if (!TryGetTokenLength(col.tdsType, stateObj, out intLength))
+                    {
+                        length = 0;
+                        return false;
+                    }
+                    length = (ulong)intLength;
+                    return true;
                 }
                 else
                 {
-                    isNull = true;
-                    length = 0;
+                    length = null;
                     return true;
                 }
             }
             else
             {
-                // non-blob columns
-                ulong longlen;
-                if (!TryGetDataLength(col, stateObj, out longlen))
+                bool readResult;
+                ulong readLength;
+                if (isPlp)
                 {
-                    isNull = false;
+                    // Handle Yukon specific tokens
+                    Debug.Assert(col.tdsType == TdsEnums.SQLXMLTYPE ||
+                                 col.tdsType == TdsEnums.SQLBIGVARCHAR ||
+                                 col.tdsType == TdsEnums.SQLBIGVARBINARY ||
+                                 col.tdsType == TdsEnums.SQLNVARCHAR ||
+                                 // Large UDTs is WinFS-only
+                                 col.tdsType == TdsEnums.SQLUDT,
+                                 "GetDataLength:Invalid streaming datatype");
+                    readResult = stateObj.TryReadPlpLength(true, out readLength);
+                }
+                else
+                {
+                    // non-blob columns
+                    int intLength;
+                    readResult = TryGetTokenLength(col.tdsType, stateObj, out intLength);
+                    readLength = (ulong)intLength;
+                }
+
+                if (!readResult)
+                {
                     length = 0;
                     return false;
                 }
-                isNull = IsNull(col.metaType, longlen);
-                length = (isNull ? 0 : longlen);
+                length = IsNull(col.metaType, readLength) ? (ulong?)null : readLength;
                 return true;
             }
         }
@@ -3923,14 +3934,13 @@ namespace System.Data.SqlClient
                 _SqlMetaData md = columns[i];
                 Debug.Assert(md != null, "_SqlMetaData should not be null for column " + i.ToString(CultureInfo.InvariantCulture));
 
-                bool isNull;
-                ulong len;
-                if (!TryProcessColumnHeader(md, stateObj, i, out isNull, out len))
+                ulong? len;
+                if (!TryProcessColumnHeader(md, stateObj, i, out len))
                 {
                     return false;
                 }
 
-                if (isNull)
+                if (!len.HasValue)
                 {
                     GetNullSqlValue(data, md);
                     buffer[map[i]] = data.SqlValue;
@@ -5492,37 +5502,6 @@ namespace System.Data.SqlClient
             char[] charData = value.ToCharArray(charOffset, numChars);
 
             return encoding.GetByteCount(charData, 0, numChars);
-        }
-
-        //
-        // Returns the data stream length of the data identified by tds type or SqlMetaData returns
-        // Returns either the total size or the size of the first chunk for partially length prefixed types.
-        //
-        internal bool TryGetDataLength(SqlMetaDataPriv colmeta, TdsParserStateObject stateObj, out ulong length)
-        {
-            // Handle Yukon specific tokens
-            if (colmeta.metaType.IsPlp)
-            {
-                Debug.Assert(colmeta.tdsType == TdsEnums.SQLXMLTYPE ||
-                             colmeta.tdsType == TdsEnums.SQLBIGVARCHAR ||
-                             colmeta.tdsType == TdsEnums.SQLBIGVARBINARY ||
-                             colmeta.tdsType == TdsEnums.SQLNVARCHAR ||
-                             // Large UDTs is WinFS-only
-                             colmeta.tdsType == TdsEnums.SQLUDT,
-                             "GetDataLength:Invalid streaming datatype");
-                return stateObj.TryReadPlpLength(true, out length);
-            }
-            else
-            {
-                int intLength;
-                if (!TryGetTokenLength(colmeta.tdsType, stateObj, out intLength))
-                {
-                    length = 0;
-                    return false;
-                }
-                length = (ulong)intLength;
-                return true;
-            }
         }
 
         //

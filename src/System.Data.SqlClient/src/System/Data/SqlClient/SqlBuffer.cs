@@ -15,7 +15,7 @@ namespace System.Data.SqlClient
 {
     internal sealed class SqlBuffer
     {
-        internal enum StorageType
+        internal enum StorageType : byte
         {
             Empty = 0,
             Boolean,
@@ -381,7 +381,7 @@ namespace System.Data.SqlClient
         }
 
         // use static list of format strings indexed by scale for perf
-        private static string[] s_katmaiDateTimeOffsetFormatByScale = new string[] {
+        private static readonly string[] s_katmaiDateTimeOffsetFormatByScale = new string[] {
                 "yyyy-MM-dd HH:mm:ss zzz",
                 "yyyy-MM-dd HH:mm:ss.f zzz",
                 "yyyy-MM-dd HH:mm:ss.ff zzz",
@@ -392,7 +392,7 @@ namespace System.Data.SqlClient
                 "yyyy-MM-dd HH:mm:ss.fffffff zzz",
         };
 
-        private static string[] s_katmaiDateTime2FormatByScale = new string[] {
+        private static readonly string[] s_katmaiDateTime2FormatByScale = new string[] {
                 "yyyy-MM-dd HH:mm:ss",
                 "yyyy-MM-dd HH:mm:ss.f",
                 "yyyy-MM-dd HH:mm:ss.ff",
@@ -403,7 +403,7 @@ namespace System.Data.SqlClient
                 "yyyy-MM-dd HH:mm:ss.fffffff",
         };
 
-        private static string[] s_katmaiTimeFormatByScale = new string[] {
+        private static readonly string[] s_katmaiTimeFormatByScale = new string[] {
                 "HH:mm:ss",
                 "HH:mm:ss.f",
                 "HH:mm:ss.ff",
@@ -948,16 +948,6 @@ namespace System.Data.SqlClient
             return buffers;
         }
 
-        internal static SqlBuffer[] CloneBufferArray(SqlBuffer[] values)
-        {
-            SqlBuffer[] copy = new SqlBuffer[values.Length];
-            for (int i = 0; i < values.Length; i++)
-            {
-                copy[i] = new SqlBuffer(values[i]);
-            }
-            return copy;
-        }
-
         internal static void Clear(SqlBuffer[] values)
         {
             if (null != values)
@@ -1032,31 +1022,12 @@ namespace System.Data.SqlClient
             _isNull = false;
         }
 
-        internal void SetToDate(DateTime date)
-        {
-            Debug.Assert(IsEmpty, "setting value a second time?");
-
-            _type = StorageType.Date;
-            _value._int32 = date.Subtract(DateTime.MinValue).Days;
-            _isNull = false;
-        }
-
         internal void SetToTime(byte[] bytes, int length, byte scale)
         {
             Debug.Assert(IsEmpty, "setting value a second time?");
 
             _type = StorageType.Time;
             FillInTimeInfo(ref _value._timeInfo, bytes, length, scale);
-            _isNull = false;
-        }
-
-        internal void SetToTime(TimeSpan timeSpan, byte scale)
-        {
-            Debug.Assert(IsEmpty, "setting value a second time?");
-
-            _type = StorageType.Time;
-            _value._timeInfo.ticks = timeSpan.Ticks;
-            _value._timeInfo.scale = scale;
             _isNull = false;
         }
 
@@ -1070,17 +1041,6 @@ namespace System.Data.SqlClient
             _isNull = false;
         }
 
-        internal void SetToDateTime2(DateTime dateTime, byte scale)
-        {
-            Debug.Assert(IsEmpty, "setting value a second time?");
-
-            _type = StorageType.DateTime2;
-            _value._dateTime2Info.timeInfo.ticks = dateTime.TimeOfDay.Ticks;
-            _value._dateTime2Info.timeInfo.scale = scale;
-            _value._dateTime2Info.date = dateTime.Subtract(DateTime.MinValue).Days;
-            _isNull = false;
-        }
-
         internal void SetToDateTimeOffset(byte[] bytes, int length, byte scale)
         {
             Debug.Assert(IsEmpty, "setting value a second time?");
@@ -1089,19 +1049,6 @@ namespace System.Data.SqlClient
             FillInTimeInfo(ref _value._dateTimeOffsetInfo.dateTime2Info.timeInfo, bytes, length - 5, scale); // remaining 5 bytes are for date and offset
             _value._dateTimeOffsetInfo.dateTime2Info.date = GetDateFromByteArray(bytes, length - 5); // 3 bytes for date
             _value._dateTimeOffsetInfo.offset = (Int16)(bytes[length - 2] + (bytes[length - 1] << 8)); // 2 bytes for offset (Int16)
-            _isNull = false;
-        }
-
-        internal void SetToDateTimeOffset(DateTimeOffset dateTimeOffset, byte scale)
-        {
-            Debug.Assert(IsEmpty, "setting value a second time?");
-
-            _type = StorageType.DateTimeOffset;
-            DateTime utcDateTime = dateTimeOffset.UtcDateTime; // timeInfo stores the utc datetime of a datatimeoffset
-            _value._dateTimeOffsetInfo.dateTime2Info.timeInfo.ticks = utcDateTime.TimeOfDay.Ticks;
-            _value._dateTimeOffsetInfo.dateTime2Info.timeInfo.scale = scale;
-            _value._dateTimeOffsetInfo.dateTime2Info.date = utcDateTime.Subtract(DateTime.MinValue).Days;
-            _value._dateTimeOffsetInfo.offset = (Int16)dateTimeOffset.Offset.TotalMinutes;
             _isNull = false;
         }
 

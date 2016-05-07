@@ -1,5 +1,6 @@
-// Copyright (c) Microsoft. All rights reserved.
-// Licensed under the MIT license. See LICENSE file in the project root for full license information.
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+// See the LICENSE file in the project root for more information.
 
 
 
@@ -44,7 +45,7 @@ namespace System.Data.Common
         {
             if (null == values)
             {
-                throw ADP.ArgumentNull("values");
+                throw ADP.ArgumentNull(nameof(values));
             }
 
             int copyLen = (values.Length < _schemaInfo.Length) ? values.Length : _schemaInfo.Length;
@@ -121,7 +122,7 @@ namespace System.Data.Common
             // is invalid
             if (dataIndex > Int32.MaxValue)
             {
-                throw ADP.InvalidSourceBufferIndex(cbytes, dataIndex, "dataIndex");
+                throw ADP.InvalidSourceBufferIndex(cbytes, dataIndex, nameof(dataIndex));
             }
 
             ndataIndex = (int)dataIndex;
@@ -142,7 +143,7 @@ namespace System.Data.Common
                 }
 
                 // until arrays are 64 bit, we have to do these casts
-                Array.Copy(data, ndataIndex, buffer, bufferIndex, (int)cbytes);
+                Buffer.BlockCopy(data, ndataIndex, buffer, bufferIndex, (int)cbytes);
             }
             catch (Exception e)
             {
@@ -155,11 +156,11 @@ namespace System.Data.Common
 
                     // if bad buffer index, throw
                     if (bufferIndex < 0 || bufferIndex >= buffer.Length)
-                        throw ADP.InvalidDestinationBufferIndex(length, bufferIndex, "bufferIndex");
+                        throw ADP.InvalidDestinationBufferIndex(length, bufferIndex, nameof(bufferIndex));
 
                     // if bad data index, throw
                     if (dataIndex < 0 || dataIndex >= cbytes)
-                        throw ADP.InvalidSourceBufferIndex(length, dataIndex, "dataIndex");
+                        throw ADP.InvalidSourceBufferIndex(length, dataIndex, nameof(dataIndex));
 
                     // if there is not enough room in the buffer for data
                     if (cbytes + bufferIndex > buffer.Length)
@@ -174,36 +175,23 @@ namespace System.Data.Common
 
         public override char GetChar(int i)
         {
-            string s;
-
-            s = (string)_values[i];
-            char[] c = s.ToCharArray();
-            return c[0];
+            return ((string)_values[i])[0];
         }
 
         public override long GetChars(int i, long dataIndex, char[] buffer, int bufferIndex, int length)
         {
-            int cchars = 0;
-            string s;
-            int ndataIndex;
-
-            // if the object doesn't contain a char[] then the user will get an exception
-            s = (string)_values[i];
-
-            char[] data = s.ToCharArray();
-
-            cchars = data.Length;
+            var s = (string)_values[i];
+            int cchars = s.Length;
 
             // since arrays can't handle 64 bit values and this interface doesn't
             // allow chunked access to data, a dataIndex outside the rang of Int32
             // is invalid
             if (dataIndex > Int32.MaxValue)
             {
-                throw ADP.InvalidSourceBufferIndex(cchars, dataIndex, "dataIndex");
+                throw ADP.InvalidSourceBufferIndex(cchars, dataIndex, nameof(dataIndex));
             }
 
-            ndataIndex = (int)dataIndex;
-
+            int ndataIndex = (int)dataIndex;
 
             // if no buffer is passed in, return the number of characters we have
             if (null == buffer)
@@ -220,24 +208,24 @@ namespace System.Data.Common
                         cchars = length;
                 }
 
-                Array.Copy(data, ndataIndex, buffer, bufferIndex, cchars);
+                s.CopyTo(ndataIndex, buffer, bufferIndex, cchars);
             }
             catch (Exception e)
             {
                 if (ADP.IsCatchableExceptionType(e))
                 {
-                    cchars = data.Length;
+                    cchars = s.Length;
 
                     if (length < 0)
                         throw ADP.InvalidDataLength(length);
 
                     // if bad buffer index, throw
                     if (bufferIndex < 0 || bufferIndex >= buffer.Length)
-                        throw ADP.InvalidDestinationBufferIndex(buffer.Length, bufferIndex, "bufferIndex");
+                        throw ADP.InvalidDestinationBufferIndex(buffer.Length, bufferIndex, nameof(bufferIndex));
 
                     // if bad data index, throw
                     if (ndataIndex < 0 || ndataIndex >= cchars)
-                        throw ADP.InvalidSourceBufferIndex(cchars, dataIndex, "dataIndex");
+                        throw ADP.InvalidSourceBufferIndex(cchars, dataIndex, nameof(dataIndex));
 
                     // if there is not enough room in the buffer for data
                     if (cchars + bufferIndex > buffer.Length)

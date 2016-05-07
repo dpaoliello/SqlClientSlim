@@ -1,5 +1,6 @@
-// Copyright (c) Microsoft. All rights reserved.
-// Licensed under the MIT license. See LICENSE file in the project root for full license information.
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+// See the LICENSE file in the project root for more information.
 
 using System.Collections;
 using System.Data.Common;
@@ -39,17 +40,14 @@ namespace System.Data.SqlClient
         internal bool _supressStateChangeForReconnection;
         private int _reconnectCount;
 
+        // Transient Fault handling flag. This is needed to convey to the downstream mechanism of connection establishment, if Transient Fault handling should be used or not
+        // The downstream handling of Connection open is the same for idle connection resiliency. Currently we want to apply transient fault handling only to the connections opened
+        // using SqlConnection.Open() method. 
+        internal bool _applyTransientFaultHandling = false;
+
         public SqlConnection(string connectionString) : this()
         {
             ConnectionString = connectionString;    // setting connection string first so that ConnectionOption is available
-            CacheConnectionStringProperties();
-        }
-
-        private SqlConnection(SqlConnection connection)
-        { // Clone
-            GC.SuppressFinalize(this);
-            CopyFrom(connection);
-            _connectionString = connection._connectionString;
             CacheConnectionStringProperties();
         }
 
@@ -135,25 +133,6 @@ namespace System.Data.SqlClient
                 _AsyncCommandInProgress = value;
             }
         }
-
-
-        // Does this connection uses Integrated Security?
-        private bool UsesIntegratedSecurity(SqlConnectionString opt)
-        {
-            return opt != null ? opt.IntegratedSecurity : false;
-        }
-
-        // Does this connection uses old style of clear userID or Password in connection string?
-        private bool UsesClearUserIdOrPassword(SqlConnectionString opt)
-        {
-            bool result = false;
-            if (null != opt)
-            {
-                result = (!ADP.IsEmpty(opt.UserID) || !ADP.IsEmpty(opt.Password));
-            }
-            return result;
-        }
-
 
         internal SqlConnectionString.TypeSystem TypeSystem
         {
@@ -458,7 +437,7 @@ namespace System.Data.SqlClient
 
         static public void ClearPool(SqlConnection connection)
         {
-            ADP.CheckArgumentNull(connection, "connection");
+            ADP.CheckArgumentNull(connection, nameof(connection));
 
             DbConnectionOptions connectionOptions = connection.UserConnectionOptions;
             if (null != connectionOptions)
@@ -473,7 +452,7 @@ namespace System.Data.SqlClient
             // CloseConnection() now handles the lock
 
             // The SqlInternalConnectionTds is set to OpenBusy during close, once this happens the cast below will fail and 
-            // the command will no longer be cancelable.  It might be desirable to be able to cancel the close opperation, but this is
+            // the command will no longer be cancelable.  It might be desirable to be able to cancel the close operation, but this is
             // outside of the scope of Whidbey RTM.  See (SqlCommand::Cancel) for other lock.
             InnerConnection.CloseConnection(this, ConnectionFactory);
         }
@@ -542,17 +521,7 @@ namespace System.Data.SqlClient
 
         override public void Open()
         {
-            if (StatisticsEnabled)
-            {
-                if (null == _statistics)
-                {
-                    _statistics = new SqlStatistics();
-                }
-                else
-                {
-                    _statistics.ContinueOnNewConnection();
-                }
-            }
+            PrepareStatisticsForNewConnection();
 
             SqlStatistics statistics = null;
             try
@@ -739,7 +708,7 @@ namespace System.Data.SqlClient
             return runningReconnect;
         }
 
-        // this is straightforward, but expensive method to do connection resiliency - it take locks and all prepartions as for TDS request
+        // this is straightforward, but expensive method to do connection resiliency - it take locks and all preparations as for TDS request
         partial void RepairInnerConnection()
         {
             WaitForPendingReconnection();
@@ -778,17 +747,7 @@ namespace System.Data.SqlClient
 
         public override Task OpenAsync(CancellationToken cancellationToken)
         {
-            if (StatisticsEnabled)
-            {
-                if (null == _statistics)
-                {
-                    _statistics = new SqlStatistics();
-                }
-                else
-                {
-                    _statistics.ContinueOnNewConnection();
-                }
-            }
+            PrepareStatisticsForNewConnection();
 
             SqlStatistics statistics = null;
             try
@@ -915,8 +874,26 @@ namespace System.Data.SqlClient
             }
         }
 
+        private void PrepareStatisticsForNewConnection()
+        {
+            if (StatisticsEnabled)
+            {
+                if (null == _statistics)
+                {
+                    _statistics = new SqlStatistics();
+                }
+                else
+                {
+                    _statistics.ContinueOnNewConnection();
+                }
+            }
+        }
+
         private bool TryOpen(TaskCompletionSource<DbConnectionInternal> retry)
         {
+            SqlConnectionString connectionOptions = (SqlConnectionString)ConnectionOptions;
+            _applyTransientFaultHandling = (retry == null && connectionOptions != null && connectionOptions.ConnectRetryCount > 0);
+
             if (ForceNewConnection)
             {
                 if (!InnerConnection.TryReplaceConnection(this, ConnectionFactory, retry, UserConnectionOptions))
@@ -933,7 +910,7 @@ namespace System.Data.SqlClient
             }
             // does not require GC.KeepAlive(this) because of OnStateChange
 
-            var tdsInnerConnection = (InnerConnection as SqlInternalConnectionTds);
+            var tdsInnerConnection = (SqlInternalConnectionTds)InnerConnection;
             Debug.Assert(tdsInnerConnection.Parser != null, "Where's the parser?");
 
             if (!tdsInnerConnection.ConnectionOptions.Pooling)
@@ -1040,7 +1017,7 @@ namespace System.Data.SqlClient
         // as native OleDb and Odbc.
         static internal string FixupDatabaseTransactionName(string name)
         {
-            if (!ADP.IsEmpty(name))
+            if (!string.IsNullOrEmpty(name))
             {
                 return SqlServerEscapeHelper.EscapeIdentifier(name);
             }
@@ -1154,10 +1131,10 @@ namespace System.Data.SqlClient
         // this only happens once per connection
         // SxS: using named file mapping APIs
 
-        internal void RegisterForConnectionCloseNotification<T>(ref Task<T> outterTask, object value, int tag)
+        internal void RegisterForConnectionCloseNotification<T>(ref Task<T> outerTask, object value, int tag)
         {
             // Connection exists,  schedule removal, will be added to ref collection after calling ValidateAndReconnect
-            outterTask = outterTask.ContinueWith(task =>
+            outerTask = outerTask.ContinueWith(task =>
             {
                 RemoveWeakReference(value);
                 return task;
@@ -1183,11 +1160,11 @@ namespace System.Data.SqlClient
             if (null != Statistics)
             {
                 UpdateStatistics();
-                return Statistics.GetHashtable();
+                return Statistics.GetDictionary();
             }
             else
             {
-                return new SqlStatistics().GetHashtable();
+                return new SqlStatistics().GetDictionary();
             }
         }
 

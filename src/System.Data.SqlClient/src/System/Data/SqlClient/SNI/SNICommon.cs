@@ -1,5 +1,6 @@
-// Copyright (c) Microsoft. All rights reserved.
-// Licensed under the MIT license. See LICENSE file in the project root for full license information.
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+// See the LICENSE file in the project root for more information.
 
 using System.Net.Security;
 using System.Security.Cryptography.X509Certificates;
@@ -18,10 +19,16 @@ namespace System.Data.SqlClient.SNI
     /// </summary>
     internal enum SNIProviders
     {
-        NP_PROV = 1,        // Named Pipes Provider
-        SMUX_PROV = 5,      // MARS Provider
-        TCP_PROV = 7,       // TCP Provider
-        INVALID_PROV = 10,  // Invalid Provider
+        HTTP_PROV, // HTTP Provider
+        NP_PROV, // Named Pipes Provider
+        SESSION_PROV, // Session Provider
+        SIGN_PROV, // Sign Provider
+        SM_PROV, // Shared Memory Provider
+        SMUX_PROV, // SMUX Provider
+        SSL_PROV, // SSL Provider
+        TCP_PROV, // TCP Provider
+        MAX_PROVS, // Number of providers
+        INVALID_PROV // SQL Network Interfaces
     }
 
     /// <summary>
@@ -53,6 +60,22 @@ namespace System.Data.SqlClient.SNI
 
     internal class SNICommon
     {
+        // Each error number maps to SNI_ERROR_* in String.resx
+        internal const int ConnTerminatedError = 2;
+        internal const int InvalidParameterError = 5;
+        internal const int ProtocolNotSupportedError = 8;
+        internal const int ConnTimeoutError = 11;
+        internal const int ConnNotUsableError = 19;
+        internal const int InvalidConnStringError = 25;
+        internal const int HandshakeFailureError = 31;
+        internal const int InternalExceptionError = 35;
+        internal const int ConnOpenFailedError = 40;
+        internal const int LocalDBErrorCode = 50;
+        internal const int MultiSubnetFailoverWithMoreThan64IPs = 47;
+        internal const int MultiSubnetFailoverWithInstanceSpecified = 48;
+        internal const int MultiSubnetFailoverWithNonTcpProtocol = 49;
+        internal const int MaxErrorValue = 50157;
+
         /// <summary>
         /// Validate server certificate callback for SSL
         /// </summary>
@@ -121,7 +144,29 @@ namespace System.Data.SqlClient.SNI
         /// <returns></returns>
         internal static uint ReportSNIError(SNIProviders provider, uint nativeError, uint sniError, string errorMessage)
         {
-            SNILoadHandle.SingletonInstance.LastError = new SNIError(provider, nativeError, sniError, errorMessage);
+            return ReportSNIError(new SNIError(provider, nativeError, sniError, errorMessage));
+        }
+
+        /// <summary>
+        /// Sets last error encountered for SNI
+        /// </summary>
+        /// <param name="provider">SNI provider</param>
+        /// <param name="sniError">SNI error code</param>
+        /// <param name="sniException">SNI Exception</param>
+        /// <returns></returns>
+        internal static uint ReportSNIError(SNIProviders provider, uint sniError, Exception sniException)
+        {
+            return ReportSNIError(new SNIError(provider, sniError, sniException));
+        }
+
+        /// <summary>
+        /// Sets last error encountered for SNI
+        /// </summary>
+        /// <param name="error">SNI error</param>
+        /// <returns></returns>
+        internal static uint ReportSNIError(SNIError error)
+        {
+            SNILoadHandle.SingletonInstance.LastError = error;
             return TdsEnums.SNI_ERROR;
         }
     }

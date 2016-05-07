@@ -3,12 +3,19 @@
 // See the LICENSE file in the project root for more information.
 
 
-
 //------------------------------------------------------------------------------
 
+using System.Security.Principal;
 
-namespace System.Data
+
+namespace System.Data.ProviderBase
 {
-    public delegate void StatementCompletedEventHandler(object sender, StatementCompletedEventArgs e);
+    partial class DbConnectionPoolIdentity
+    {
+        static internal DbConnectionPoolIdentity GetCurrent()
+        {
+            throw new PlatformNotSupportedException();
+        }
+    }
 }
 

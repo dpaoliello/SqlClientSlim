@@ -2,6 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+using System.Diagnostics;
+using System.Threading;
+
 namespace System.Data.SqlClient.SNI
 {
     /// <summary>
@@ -9,6 +12,8 @@ namespace System.Data.SqlClient.SNI
     /// </summary>
     internal abstract class SNIHandle
     {
+        protected DebugLock _debugLock;
+
         /// <summary>
         /// Dispose class
         /// </summary>
@@ -82,5 +87,51 @@ namespace System.Data.SqlClient.SNI
         /// </summary>
         public abstract void KillConnection();
 #endif
+
+        protected struct DebugLock
+        {
+            private const int NoThread = 0;
+#if DEBUG
+            private int _threadHoldingLock;
+#endif
+
+            public IDisposable Acquire(SNIHandle handle)
+            {
+#if DEBUG
+                int previousThread = Interlocked.CompareExchange(ref _threadHoldingLock, Thread.CurrentThread.ManagedThreadId, NoThread);
+                if (previousThread != NoThread)
+                {
+                    Debug.Assert(false, $"Another thread is holding the lock: {previousThread}");
+                }
+                return new Holder(handle);
+#else
+                return null;
+#endif
+            }
+
+            public void Release()
+            {
+#if DEBUG
+                int previousThread = Interlocked.CompareExchange(ref _threadHoldingLock, NoThread, Thread.CurrentThread.ManagedThreadId);
+                Debug.Assert(previousThread == Thread.CurrentThread.ManagedThreadId, "This thread was not holding the lock");
+#endif
+            }
+
+            private struct Holder : IDisposable
+            {
+                private readonly SNIHandle _handle;
+
+                public Holder(SNIHandle handle)
+                {
+                    _handle = handle;
+                }
+
+                public void Dispose()
+                {
+                    _handle._debugLock.Release();
+                }
+            }
+        }
+
     }
 }

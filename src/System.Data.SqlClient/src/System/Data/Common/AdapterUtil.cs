@@ -83,17 +83,6 @@ namespace System.Data.Common
             }
         }
 
-        static private readonly bool s_isWindows = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
-
-        static internal bool IsWindows
-        {
-            get
-            {
-                return s_isWindows;
-            }
-        }
-
-
         //
         // COM+ exceptions
         //

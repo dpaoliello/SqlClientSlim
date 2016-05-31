@@ -1123,45 +1123,8 @@ namespace System.Data.SqlClient
             // There is an exception here for MARS as its possible that another thread has closed the connection just as we see an error
             Debug.Assert(SniContext.Undefined != stateObj.DebugOnlyCopyOfSniContext || ((_fMARS) && ((_state == TdsParserState.Closed) || (_state == TdsParserState.Broken))), "SniContext must not be None");
 #endif
-#if MANAGED_SNI
-            // NYI
-#else
-            if (sniError.sniError != 0)
-            {
-                // handle special SNI error codes that are converted into exception which is not a SqlException.
-                switch (sniError.sniError)
-                {
-                    case (int)SNINativeMethodWrapper.SniSpecialErrors.MultiSubnetFailoverWithMoreThan64IPs:
-                        // Connecting with the MultiSubnetFailover connection option to a SQL Server instance configured with more than 64 IP addresses is not supported.
-                        throw SQL.MultiSubnetFailoverWithMoreThan64IPs();
 
-                    case (int)SNINativeMethodWrapper.SniSpecialErrors.MultiSubnetFailoverWithInstanceSpecified:
-                        // Connecting to a named SQL Server instance using the MultiSubnetFailover connection option is not supported.
-                        throw SQL.MultiSubnetFailoverWithInstanceSpecified();
-
-                    case (int)SNINativeMethodWrapper.SniSpecialErrors.MultiSubnetFailoverWithNonTcpProtocol:
-                        // Connecting to a SQL Server instance using the MultiSubnetFailover connection option is only supported when using the TCP protocol.
-                        throw SQL.MultiSubnetFailoverWithNonTcpProtocol();
-                        // continue building SqlError instance
-                }
-            }
-            // PInvoke code automatically sets the length of the string for us
-            // So no need to look for \0
-            string errorMessage = sniError.errorMessage;
-
-            //  Format SNI errors and add Context Information
-            //
-            //  General syntax is:
-            //  <sqlclient message>
-            //  (provider:<SNIx provider>, error: <SNIx error code> - <SNIx error message>)
-            //
-            // errorMessage | sniError |
-            // -------------------------------------------
-            // ==null       | x        | must never happen
-            // !=null       | != 0     | retrieve corresponding errorMessage from resources
-            // !=null       | == 0     | replace text left of errorMessage
-            //
-
+            string errorMessage = sniError.errorMessage ?? sniError.exception.Message;
 #if MANAGED_SNI
             Debug.Assert(!string.IsNullOrEmpty(errorMessage) || sniError.sniError != 0, "Empty error message received from SNI");
 #else
@@ -1208,7 +1171,7 @@ namespace System.Data.SqlClient
                 // SNI error. Append additional error message info if available.
                 //
                 string sniLookupMessage = SQL.GetSNIErrorMessage((int)sniError.sniError);
-                errorMessage =  (sniError.errorMessage != string.Empty) ?
+                errorMessage =  (sniError.errorMessage != null) ?
                                 (sniLookupMessage + ": " + sniError.errorMessage) :
                                 sniLookupMessage;
 #else
@@ -6637,7 +6600,7 @@ namespace System.Data.SqlClient
                         }
                         else
                         {
-                            Debug.Assert(!string.IsNullOrEmpty(rpcext.rpcName), "must have an RPC name");
+                            Debug.Assert(!string.IsNullOrEmpty(rpc.rpcName), "must have an RPC name");
                             tempLen = rpc.rpcName.Length;
                             WriteShort(tempLen, stateObj);
                             WriteString(rpc.rpcName, tempLen, 0, stateObj);
@@ -6683,9 +6646,9 @@ namespace System.Data.SqlClient
                         // if we have an output param, set the value to null so we do not send it across to the server
                         if (param.Direction == ParameterDirection.Output)
                         {
-                            isSqlVal = param.ParamaterIsSqlType;  // We have to forward the TYPE info, we need to know what type we are returning.  Once we null the paramater we will no longer be able to distinguish what type were seeing.
+                            isSqlVal = param.ParameterIsSqlType;  // We have to forward the TYPE info, we need to know what type we are returning.  Once we null the paramater we will no longer be able to distinguish what type were seeing.
                             param.Value = null;
-                            param.ParamaterIsSqlType = isSqlVal;
+                            param.ParameterIsSqlType = isSqlVal;
                         }
                         else
                         {

@@ -12,7 +12,6 @@ using System.Data.ProviderBase;
 using System.Diagnostics;
 using System.Globalization;
 using System.Threading;
-using System.Diagnostics.CodeAnalysis;
 using System.Threading.Tasks;
 
 namespace System.Data.SqlClient

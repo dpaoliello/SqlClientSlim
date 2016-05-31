@@ -23,8 +23,7 @@ namespace System.Data.ProviderBase
                 bool isNetwork = identity.User.IsWellKnown(WellKnownSidType.NetworkSid);
                 string sidString = identity.User.Value;
 
-                // Win32NativeMethods.IsTokenRestricted will raise exception if the native call fails
-                bool isRestricted = Win32NativeMethods.IsTokenRestrictedWrapper(token);
+                bool isRestricted = SafeNativeMethods.IsTokenRestricted(token);
 
                 var lastIdentity = s_lastIdentity;
                 if ((lastIdentity != null) && (lastIdentity._sidString == sidString) && (lastIdentity._isRestricted == isRestricted) && (lastIdentity._isNetwork == isNetwork))

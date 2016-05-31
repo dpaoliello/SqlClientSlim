@@ -25,15 +25,12 @@ namespace System.Data.SqlClient.SNI
         private readonly object _callbackObject;
         private readonly Socket _socket;
         private readonly NetworkStream _tcpStream;
-        private readonly TaskScheduler _writeScheduler;
-        private readonly TaskFactory _writeTaskFactory;
 
         private Stream _stream;
         private SslStream _sslStream;
         private SslOverTdsStream _sslOverTdsStream;
         private SNIAsyncCallback _receiveCallback;
         private SNIAsyncCallback _sendCallback;
-        private DebugLock _debugLock;
 
         private bool _validateCert = true;
         private int _bufferSize = TdsEnums.DEFAULT_LOGIN_PACKET_SIZE;
@@ -80,10 +77,8 @@ namespace System.Data.SqlClient.SNI
         /// <param name="port">TCP port number</param>
         /// <param name="timerExpire">Connection timer expiration</param>
         /// <param name="callbackObject">Callback object</param>
-        public SNITCPHandle(string serverName, int port, long timerExpire, object callbackObject, bool parallel)
+        public SNITCPHandle(string serverName, int port, long timerExpire, object callbackObject, bool parallel, out SNIError sniError)
         {
-            _writeScheduler = new ConcurrentExclusiveSchedulerPair().ExclusiveScheduler;
-            _writeTaskFactory = new TaskFactory(_writeScheduler);
             _callbackObject = callbackObject;
             _targetServer = serverName;
 
@@ -110,7 +105,7 @@ namespace System.Data.SqlClient.SNI
                     if (serverAddresses.Length > MaxParallelIpAddresses)
                     {
                         // Fail if above 64 to match legacy behavior
-                        ReportTcpSNIError(0, SNICommon.MultiSubnetFailoverWithMoreThan64IPs, string.Empty);
+                        sniError = new SNIError(SNIProviders.TCP_PROV, 0, SNICommon.MultiSubnetFailoverWithMoreThan64IPs, string.Empty);
                         return;
                     }
 
@@ -123,7 +118,7 @@ namespace System.Data.SqlClient.SNI
 
                 if (!(isInfiniteTimeOut ? connectTask.Wait(-1) : connectTask.Wait(ts)))
                 {
-                    ReportTcpSNIError(0, SNICommon.ConnOpenFailedError, string.Empty);
+                    sniError = new SNIError(SNIProviders.TCP_PROV, 0, SNICommon.ConnOpenFailedError, string.Empty);
                     return;
                 }
 
@@ -136,16 +131,17 @@ namespace System.Data.SqlClient.SNI
             }
             catch (SocketException se)
             {
-                ReportTcpSNIError(se);
+                sniError = new SNIError(SNIProviders.TCP_PROV, 0, se);
                 return;
             }
             catch (Exception e)
             {
-                ReportTcpSNIError(e);
+                sniError = new SNIError(SNIProviders.TCP_PROV, 0, e);
                 return;
             }
 
             _stream = _tcpStream;
+            sniError = null;
         }
 
         private static async Task<Socket> ConnectAsync(string serverName, int port)
@@ -226,11 +222,11 @@ namespace System.Data.SqlClient.SNI
             }
             catch (AuthenticationException aue)
             {
-                return ReportTcpSNIError(aue);
+                return new SNIError(SNIProviders.TCP_PROV, 0, aue);
             }
             catch (InvalidOperationException ioe)
             {
-                return ReportTcpSNIError(ioe);
+                return new SNIError(SNIProviders.TCP_PROV, 0, ioe);
             }
 
             _stream = _sslStream;
@@ -295,15 +291,15 @@ namespace System.Data.SqlClient.SNI
                 }
                 catch (ObjectDisposedException ode)
                 {
-                    return ReportTcpSNIError(ode);
+                    return new SNIError(SNIProviders.TCP_PROV, 0, ode);
                 }
                 catch (SocketException se)
                 {
-                    return ReportTcpSNIError(se);
+                    return new SNIError(SNIProviders.TCP_PROV, 0, se);
                 }
                 catch (IOException ioe)
                 {
-                    return ReportTcpSNIError(ioe);
+                    return new SNIError(SNIProviders.TCP_PROV, 0, ioe);
                 }
             }
         }
@@ -314,7 +310,7 @@ namespace System.Data.SqlClient.SNI
         /// <param name="packet">SNI packet</param>
         /// <param name="timeoutInMilliseconds">Timeout in Milliseconds</param>
         /// <returns>SNI error code</returns>
-        public override SNIError Receive(ref SNIPacket packet, int timeout)
+        public override SNIError Receive(ref SNIPacket packet, int timeoutInMilliseconds)
         {
             using (_debugLock.Acquire(this))
             {
@@ -332,8 +328,7 @@ namespace System.Data.SqlClient.SNI
                     else
                     {
                         // otherwise it is timeout for 0 or less than -1
-                        ReportTcpSNIError(0, SNICommon.ConnTimeoutError, string.Empty);
-                        return TdsEnums.SNI_WAIT_TIMEOUT;
+                        return new SNIError(SNIProviders.TCP_PROV, 0, SNICommon.ConnTimeoutError, string.Empty);
                     }
 
                     packet = new SNIPacket(null);
@@ -357,13 +352,13 @@ namespace System.Data.SqlClient.SNI
                 }
                 catch (IOException ioe)
                 {
-                    uint errorCode = ReportErrorAndReleasePacket(packet, ioe);
+                    uint errorCode = 0;
                     if (ioe.InnerException is SocketException && ((SocketException)(ioe.InnerException)).SocketErrorCode == SocketError.TimedOut)
                     {
                         errorCode = TdsEnums.SNI_WAIT_TIMEOUT;
                     }
 
-                    return errorCode;
+                    return new SNIError(SNIProviders.TCP_PROV, errorCode, ioe);
                 }
                 finally
                 {
@@ -601,53 +596,7 @@ namespace System.Data.SqlClient.SNI
         public override void KillConnection()
         {
             _socket.Shutdown(SocketShutdown.Both);
-            _socket.Disconnect(reuseSocket: false);
         }
 #endif
-
-        private struct DebugLock
-        {
-            private const int NoThread = 0;
-#if DEBUG
-            private int _threadHoldingLock;
-#endif
-
-            public IDisposable Acquire(SNITCPHandle handle)
-            {
-#if DEBUG
-                int previousThread = Interlocked.CompareExchange(ref _threadHoldingLock, Thread.CurrentThread.ManagedThreadId, NoThread);
-                if (previousThread != NoThread)
-                {
-                    Debug.Assert(false, $"Another thread is holding the lock: {previousThread}");
-                }
-                return new Holder(handle);
-#else
-                return null;
-#endif
-            }
-
-            public void Release()
-            {
-#if DEBUG
-                int previousThread = Interlocked.CompareExchange(ref _threadHoldingLock, NoThread, Thread.CurrentThread.ManagedThreadId);
-                Debug.Assert(previousThread == Thread.CurrentThread.ManagedThreadId, "This thread was not holding the lock");
-#endif
-            }
-
-            private struct Holder : IDisposable
-            {
-                private readonly SNITCPHandle _handle;
-
-                public Holder(SNITCPHandle handle)
-                {
-                    _handle = handle;
-                }
-
-                public void Dispose()
-                {
-                    _handle._debugLock.Release();
-                }
-            }
-        }
     }
 }

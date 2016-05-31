@@ -29,11 +29,10 @@ namespace System.Data.SqlClient.SNI
         private SNIAsyncCallback _sendCallback;
 
         private bool _validateCert = true;
-        private readonly uint _status = TdsEnums.SNI_UNINITIALIZED;
         private int _bufferSize = TdsEnums.DEFAULT_LOGIN_PACKET_SIZE;
         private readonly Guid _connectionId = Guid.NewGuid();
 
-        public SNINpHandle(string serverName, string pipeName, long timerExpire, object callbackObject)
+        public SNINpHandle(string serverName, string pipeName, long timerExpire, object callbackObject, out SNIError error)
         {
             _targetServer = serverName;
             _callbackObject = callbackObject;
@@ -59,21 +58,18 @@ namespace System.Data.SqlClient.SNI
             }
             catch(TimeoutException te)
             {
-                SNICommon.ReportSNIError(SNIProviders.NP_PROV, SNICommon.ConnTimeoutError, te);
-                _status = TdsEnums.SNI_WAIT_TIMEOUT;
+                error = new SNIError(SNIProviders.NP_PROV, SNICommon.ConnTimeoutError, te);
                 return;
             }
             catch(IOException ioe)
             {
-                SNICommon.ReportSNIError(SNIProviders.NP_PROV, SNICommon.ConnOpenFailedError, ioe);
-                _status = TdsEnums.SNI_ERROR;
+                error = new SNIError(SNIProviders.NP_PROV, SNICommon.ConnOpenFailedError, ioe);
                 return;
             }
 
             if (!_pipeStream.IsConnected || !_pipeStream.CanWrite || !_pipeStream.CanRead)
             {
-                SNICommon.ReportSNIError(SNIProviders.NP_PROV, 0, SNICommon.ConnOpenFailedError, string.Empty);
-                _status = TdsEnums.SNI_ERROR;
+                error = new SNIError(SNIProviders.NP_PROV, 0, SNICommon.ConnOpenFailedError, string.Empty);
                 return;
             }
 
@@ -81,7 +77,7 @@ namespace System.Data.SqlClient.SNI
             _sslStream = new SslStream(_sslOverTdsStream, true, new RemoteCertificateValidationCallback(ValidateServerCertificate), null);
 
             _stream = _pipeStream;
-            _status = TdsEnums.SNI_SUCCESS;
+            error = null;
         }
 
         public override Guid ConnectionId
@@ -92,24 +88,9 @@ namespace System.Data.SqlClient.SNI
             }
         }
 
-        public override uint Status
+        public override bool CheckConnection()
         {
-            get
-            {
-                return _status;
-            }
-        }
-
-        public override uint CheckConnection()
-        {
-            if (!_stream.CanWrite || !_stream.CanRead)
-            {
-                return TdsEnums.SNI_ERROR;
-            }
-            else
-            {
-                return TdsEnums.SNI_SUCCESS;
-            }
+            return (_stream.CanWrite && _stream.CanRead);
         }
 
         public override void Dispose()
@@ -136,7 +117,7 @@ namespace System.Data.SqlClient.SNI
             }
         }
 
-        public override uint Receive(out SNIPacket packet, int timeout)
+        public override SNIError Receive(ref SNIPacket packet, int timeout)
         {
             lock (this)
             {
@@ -149,25 +130,25 @@ namespace System.Data.SqlClient.SNI
 
                     if (packet.Length == 0)
                     {
-                        return ReportErrorAndReleasePacket(packet, 0, SNICommon.ConnTerminatedError, string.Empty);
+                        return new SNIError(SNIProviders.NP_PROV, 0, SNICommon.ConnTerminatedError, string.Empty);
                     }
                 }
                 catch (ObjectDisposedException ode)
                 {
-                    return ReportErrorAndReleasePacket(packet, ode);
+                    return new SNIError(SNIProviders.NP_PROV, 0, ode);
                 }
                 catch (IOException ioe)
                 {
-                    return ReportErrorAndReleasePacket(packet, ioe);
+                    return new SNIError(SNIProviders.NP_PROV, 0, ioe);
                 }
 
-                return TdsEnums.SNI_SUCCESS;
+                return null;
             }
         }
 
-        public override uint ReceiveAsync(ref SNIPacket packet)
+        public override bool ReceiveAsync(bool forceCallback, ref SNIPacket packet, out SNIError sniError)
         {
-            lock (this)
+            using (_debugLock.Acquire(this))
             {
                 packet = new SNIPacket(null);
                 packet.Allocate(_bufferSize);
@@ -175,40 +156,43 @@ namespace System.Data.SqlClient.SNI
                 try
                 {
                     packet.ReadFromStreamAsync(_stream, _receiveCallback);
-                    return TdsEnums.SNI_SUCCESS_IO_PENDING;
+                    sniError = null;
+                    return false;
                 }
                 catch (ObjectDisposedException ode)
                 {
-                    return ReportErrorAndReleasePacket(packet, ode);
+                    sniError = new SNIError(SNIProviders.NP_PROV, 0, ode);
                 }
                 catch (IOException ioe)
                 {
-                    return ReportErrorAndReleasePacket(packet, ioe);
+                    sniError = new SNIError(SNIProviders.NP_PROV, 0, ioe);
                 }
             }
+
+            return true;
         }
 
-        public override uint Send(SNIPacket packet)
+        public override SNIError Send(SNIPacket packet)
         {
-            lock (this)
+            using (_debugLock.Acquire(this))
             {
                 try
                 {
                     packet.WriteToStream(_stream);
-                    return TdsEnums.SNI_SUCCESS;
+                    return null;
                 }
                 catch (ObjectDisposedException ode)
                 {
-                    return ReportErrorAndReleasePacket(packet, ode);
+                    return new SNIError(SNIProviders.NP_PROV, 0, ode);
                 }
                 catch (IOException ioe)
                 {
-                    return ReportErrorAndReleasePacket(packet, ioe);
+                    return new SNIError(SNIProviders.NP_PROV, 0, ioe);
                 }
             }
         }
 
-        public override uint SendAsync(SNIPacket packet, SNIAsyncCallback callback = null)
+        public override bool SendAsync(SNIPacket packet, SNIAsyncCallback callback, bool forceCallback, out SNIError error)
         {
             SNIPacket newPacket = packet;
 
@@ -216,22 +200,22 @@ namespace System.Data.SqlClient.SNI
             {
                 try
                 {
-                    lock (this)
+                    using (_debugLock.Acquire(this))
                     {
                         packet.WriteToStream(_stream);
                     }
                 }
                 catch (Exception e)
                 {
-                    SNICommon.ReportSNIError(SNIProviders.NP_PROV, SNICommon.InternalExceptionError, e);
+                    SNIError internalError = new SNIError(SNIProviders.NP_PROV, SNICommon.InternalExceptionError, e);
 
                     if (callback != null)
                     {
-                        callback(packet, TdsEnums.SNI_ERROR);
+                        callback(packet, internalError);
                     }
                     else
                     {
-                        _sendCallback(packet, TdsEnums.SNI_ERROR);
+                        _sendCallback(packet, internalError);
                     }
 
                     return;
@@ -239,15 +223,16 @@ namespace System.Data.SqlClient.SNI
 
                 if (callback != null)
                 {
-                    callback(packet, TdsEnums.SNI_SUCCESS);
+                    callback(packet, null);
                 }
                 else
                 {
-                    _sendCallback(packet, TdsEnums.SNI_SUCCESS);
+                    _sendCallback(packet, null);
                 }
             });
 
-            return TdsEnums.SNI_SUCCESS_IO_PENDING;
+            error = null;
+            return false;
         }
 
         public override void SetAsyncCallbacks(SNIAsyncCallback receiveCallback, SNIAsyncCallback sendCallback)
@@ -256,7 +241,7 @@ namespace System.Data.SqlClient.SNI
             _sendCallback = sendCallback;
         }
 
-        public override uint EnableSsl(uint options)
+        public override SNIError EnableSsl(uint options)
         {
             _validateCert = (options & TdsEnums.SNI_SSL_VALIDATE_CERTIFICATE) != 0;
 
@@ -267,15 +252,15 @@ namespace System.Data.SqlClient.SNI
             }
             catch (AuthenticationException aue)
             {
-                return SNICommon.ReportSNIError(SNIProviders.NP_PROV, SNICommon.InternalExceptionError, aue);
+                return new SNIError(SNIProviders.NP_PROV, SNICommon.InternalExceptionError, aue);
             }
             catch (InvalidOperationException ioe)
             {
-                return SNICommon.ReportSNIError(SNIProviders.NP_PROV, SNICommon.InternalExceptionError, ioe);
+                return new SNIError(SNIProviders.NP_PROV, SNICommon.InternalExceptionError, ioe);
             }
 
             _stream = _sslStream;
-            return TdsEnums.SNI_SUCCESS;
+            return null;
         }
 
         public override void DisableSsl()
@@ -313,24 +298,6 @@ namespace System.Data.SqlClient.SNI
         public override void SetBufferSize(int bufferSize)
         {
             _bufferSize = bufferSize;
-        }
-
-        private uint ReportErrorAndReleasePacket(SNIPacket packet, Exception sniException)
-        {
-            if (packet != null)
-            {
-                packet.Release();
-            }
-            return SNICommon.ReportSNIError(SNIProviders.NP_PROV, SNICommon.InternalExceptionError, sniException);
-        }
-
-        private uint ReportErrorAndReleasePacket(SNIPacket packet, uint nativeError, uint sniError, string errorMessage)
-        {
-            if (packet != null)
-            {
-                packet.Release();
-            }
-            return SNICommon.ReportSNIError(SNIProviders.NP_PROV, nativeError, sniError, errorMessage);
         }
 
 #if DEBUG

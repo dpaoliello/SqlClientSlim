@@ -518,8 +518,6 @@ namespace System.Data.SqlClient
 
         override public void Open()
         {
-            PrepareStatisticsForNewConnection();
-
             SqlStatistics statistics = null;
             try
             {
@@ -734,8 +732,6 @@ namespace System.Data.SqlClient
 
         public override Task OpenAsync(CancellationToken cancellationToken)
         {
-            PrepareStatisticsForNewConnection();
-
             SqlStatistics statistics = null;
             try
             {

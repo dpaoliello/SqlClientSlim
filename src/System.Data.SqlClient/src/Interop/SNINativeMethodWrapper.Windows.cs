@@ -33,7 +33,7 @@ namespace System.Data
         [DllImport("api-ms-win-core-libraryloader-l1-1-0.dll", CharSet = CharSet.Ansi, BestFitMapping = false, ThrowOnUnmappableChar = true, SetLastError = true)]
         internal static extern IntPtr GetProcAddress(IntPtr HModule, [MarshalAs(UnmanagedType.LPStr), In] string funcName);
 
-        [DllImport("api-ms-win-security-base-l1-2-0.dll", BestFitMapping = false, SetLastError = false)]
+        [DllImport("api-ms-win-security-base-l1-1-0.dll", BestFitMapping = false, SetLastError = false)]
         internal static extern bool IsTokenRestricted(IntPtr TokenHandle);
     }
 }

@@ -3,6 +3,8 @@
 // See the LICENSE file in the project root for more information.
 
 
+using System.Diagnostics;
+
 namespace System.Data.SqlClient.SNI
 {
     /// <summary>
@@ -20,6 +22,8 @@ namespace System.Data.SqlClient.SNI
 
         public SNIError(SNIProviders provider, uint nativeError, uint sniErrorCode, string errorMessage)
         {
+            Debug.Assert(errorMessage != null && errorMessage.Length > 0);
+
             this.lineNumber = 0;
             this.function = string.Empty;
             this.provider = provider;
@@ -31,12 +35,14 @@ namespace System.Data.SqlClient.SNI
 
         public SNIError(SNIProviders provider, uint sniErrorCode, Exception sniException)
         {
+            Debug.Assert(sniException != null);
+
             this.lineNumber = 0;
             this.function = string.Empty;
             this.provider = provider;
             this.nativeError = 0;
             this.sniError = sniErrorCode;
-            this.errorMessage = string.Empty;
+            this.errorMessage = null;
             this.exception = sniException;
         }
     }

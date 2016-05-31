@@ -4,6 +4,8 @@ obj/
 
 # NuGet Packages
 packages/
+dotnetcli/
+tools/
 *.nupkg
 
 # Visual Studio temp files

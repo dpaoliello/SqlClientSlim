@@ -1,33 +1,34 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<Project ToolsVersion="12.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003" DefaultTargets="Build">
+<Project ToolsVersion="14.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="..\..\dir.props" />
   <PropertyGroup>
-    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
-    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <OutputType>Library</OutputType>
-    <AssemblyName>System.Data.SqlClient.Tests</AssemblyName>
-    <AssemblyVersion>4.0.0.0</AssemblyVersion>
-    <PlatformTarget>AnyCPU</PlatformTarget>
-    <PackageTargetFramework>dotnet</PackageTargetFramework>
-    <UsePackageTargetRuntimeDefaults>true</UsePackageTargetRuntimeDefaults>
-    <ExcludeResourcesImport>true</ExcludeResourcesImport>
     <ProjectGuid>{BE51A9B7-B43D-4B00-826B-7E49E648E1F2}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <RootNamespace>System.Data.SqlClient.Tests</RootNamespace>
+    <AssemblyName>System.Data.SqlClient.Tests</AssemblyName>
+    <KeepAllProjectReferences>true</KeepAllProjectReferences>
+    <LangVersion>6</LangVersion>
   </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
-  </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
-  </PropertyGroup>
-  <ItemGroup>
-    <Compile Include="SqlCommandTests.cs" />
-    <Compile Include="SqlConnectionStringBuilderTests.cs" />
-    <Compile Include="SqlConnectionTests.cs" />
-    <Compile Include="SqlDataReaderTests.cs" />
-    <Compile Include="SqlParameterCollectionTests.cs" />
-    <Compile Include="SqlParameterTests.cs" />
-    <Compile Include="Utilities.cs" />
-  </ItemGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Unix_Debug|AnyCPU'" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Unix_Release|AnyCPU'" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Windows_Debug|AnyCPU'" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Windows_Release|AnyCPU'" />
   <ItemGroup>
     <None Include="project.json" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="ExceptionTest.cs" />
+    <Compile Include="SqlBulkCopyColumnMappingCollectionTest.cs" />
+    <Compile Include="SqlCommandTests.cs" />
+    <Compile Include="SqlConnectionStringBuilderTests.cs" />
+    <Compile Include="SqlConnectionTest.RetrieveStatistics.cs" />
+    <Compile Include="SqlConnectionTests.cs" />
+    <Compile Include="SqlDataReaderTests.cs" />
+    <Compile Include="SqlErrorCollectionTest.cs" />
+    <Compile Include="SqlParameterCollectionTests.cs" />
+    <Compile Include="SqlParameterTests.cs" />
+    <Compile Include="SqlStringTest.cs" />
+    <Compile Include="Utilities.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\src\System.Data.SqlClient.csproj">

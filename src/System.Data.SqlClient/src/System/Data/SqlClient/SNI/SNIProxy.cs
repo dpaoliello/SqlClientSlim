@@ -109,7 +109,7 @@ namespace System.Data.SqlClient.SNI
         /// <returns>SNI error status</returns>
         public SNIError ReadSyncOverAsync(SNIHandle handle, ref SNIPacket packet, int timeout)
         {
-            return handle.Receive(out packet, timeout);
+            return handle.Receive(ref packet, timeout);
         }
 
         /// <summary>
@@ -181,30 +181,42 @@ namespace System.Data.SqlClient.SNI
             }
 
             // Default to using tcp if no protocol is provided
+            SNIHandle handle;
             if (serverNameParts.Length == 1)
             {
-                return CreateTcpHandle(serverNameParts[0], timerExpire, callbackObject, parallel, out sniError);
+                handle = CreateTcpHandle(serverNameParts[0], timerExpire, callbackObject, parallel, out sniError);
             }
-
-            switch (serverNameParts[0])
+            else
             {
-                case TdsEnums.TCP:
-                    return CreateTcpHandle(serverNameParts[1], timerExpire, callbackObject, parallel);
+                switch (serverNameParts[0])
+                {
+                    case TdsEnums.TCP:
+                        handle = CreateTcpHandle(serverNameParts[1], timerExpire, callbackObject, parallel, out sniError);
+                        break;
 
-                case TdsEnums.NP:
-                    return CreateNpHandle(serverNameParts[1], timerExpire, callbackObject, parallel);
+                    case TdsEnums.NP:
+                        handle = CreateNpHandle(serverNameParts[1], timerExpire, callbackObject, parallel, out sniError);
+                        break;
 
-                default:
-                    if (parallel)
-                    {
-                        SNICommon.ReportSNIError(SNIProviders.INVALID_PROV, 0, SNICommon.MultiSubnetFailoverWithNonTcpProtocol, string.Empty);
-                    }
-                    else
-                    {
-                        SNICommon.ReportSNIError(SNIProviders.INVALID_PROV, 0, SNICommon.ProtocolNotSupportedError, string.Empty);
-                    }
-                    return null;
+                    default:
+                        if (parallel)
+                        {
+                            sniError = new SNIError(SNIProviders.INVALID_PROV, 0, SNICommon.MultiSubnetFailoverWithNonTcpProtocol, string.Empty);
+                        }
+                        else
+                        {
+                            sniError = new SNIError(SNIProviders.INVALID_PROV, 0, SNICommon.ProtocolNotSupportedError, string.Empty);
+                        }
+                        handle = null;
+                        break;
+                }
             }
+
+            if (sniError != null)
+            {
+                handle = null;
+            }
+            return handle;
         }
 
         /// <summary>
@@ -237,11 +249,11 @@ namespace System.Data.SqlClient.SNI
             }
             else if (serverAndPortParts.Length > 2)
             {
-                SNILoadHandle.SingletonInstance.LastError = new SNIError(SNIProviders.TCP_PROV, 0, SNICommon.InvalidConnStringError, string.Empty);
+                sniError = new SNIError(SNIProviders.TCP_PROV, 0, SNICommon.InvalidConnStringError, string.Empty);
                 return null;
             }
 
-            return new SNITCPHandle(serverAndPortParts[0], portNumber, timerExpire, callbackObject, parallel);
+            return new SNITCPHandle(serverAndPortParts[0], portNumber, timerExpire, callbackObject, parallel, out sniError);
         }
 
         /// <summary>
@@ -252,17 +264,17 @@ namespace System.Data.SqlClient.SNI
         /// <param name="callbackObject">Asynchronous I/O callback object</param>
         /// <param name="parallel">Should MultiSubnetFailover be used. Only returns an error for named pipes.</param>
         /// <returns>SNINpHandle</returns>
-        private SNINpHandle CreateNpHandle(string fullServerName, long timerExpire, object callbackObject, bool parallel)
+        private SNINpHandle CreateNpHandle(string fullServerName, long timerExpire, object callbackObject, bool parallel, out SNIError sniError)
         {
             if (parallel)
             {
-                SNICommon.ReportSNIError(SNIProviders.NP_PROV, 0, SNICommon.MultiSubnetFailoverWithNonTcpProtocol, string.Empty);
+                sniError = new SNIError(SNIProviders.NP_PROV, 0, SNICommon.MultiSubnetFailoverWithNonTcpProtocol, string.Empty);
                 return null;
             }
 
             if(fullServerName.Length == 0 || fullServerName.Contains("/")) // Pipe paths only allow back slashes
             {
-                SNILoadHandle.SingletonInstance.LastError = new SNIError(SNIProviders.NP_PROV, 0, SNICommon.InvalidConnStringError, string.Empty);
+                sniError = new SNIError(SNIProviders.NP_PROV, 0, SNICommon.InvalidConnStringError, string.Empty);
                 return null;
             }
 
@@ -282,7 +294,7 @@ namespace System.Data.SqlClient.SNI
                     string pipeToken = "/pipe/";
                     if (!resourcePath.StartsWith(pipeToken))
                     {
-                        SNILoadHandle.SingletonInstance.LastError = new SNIError(SNIProviders.NP_PROV, 0, SNICommon.InvalidConnStringError, string.Empty);
+                        sniError = new SNIError(SNIProviders.NP_PROV, 0, SNICommon.InvalidConnStringError, string.Empty);
                         return null;
                     }
                     pipeName = resourcePath.Substring(pipeToken.Length);
@@ -290,12 +302,12 @@ namespace System.Data.SqlClient.SNI
                 }
                 catch(UriFormatException)
                 {
-                    SNILoadHandle.SingletonInstance.LastError = new SNIError(SNIProviders.NP_PROV, 0, SNICommon.InvalidConnStringError, string.Empty);
+                    sniError = new SNIError(SNIProviders.NP_PROV, 0, SNICommon.InvalidConnStringError, string.Empty);
                     return null;
                 }
             }
 
-            return new SNINpHandle(serverName, pipeName, timerExpire, callbackObject);
+            return new SNINpHandle(serverName, pipeName, timerExpire, callbackObject, out sniError);
         }
 
         /// <summary>

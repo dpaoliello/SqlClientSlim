@@ -73,7 +73,6 @@ namespace System.Data.ProviderBase
 
         public void ClearPool(DbConnectionPoolKey key)
         {
-            Debug.Assert(key != null, "key cannot be null");
             ADP.CheckArgumentNull(key.ConnectionString, nameof(key) + "." + nameof(key.ConnectionString));
 
             DbConnectionPoolGroup poolGroup;
@@ -133,7 +132,6 @@ namespace System.Data.ProviderBase
 
         protected DbConnectionOptions FindConnectionOptions(DbConnectionPoolKey key)
         {
-            Debug.Assert(key != null, "key cannot be null");
             if (!string.IsNullOrEmpty(key.ConnectionString))
             {
                 DbConnectionPoolGroup connectionPoolGroup;

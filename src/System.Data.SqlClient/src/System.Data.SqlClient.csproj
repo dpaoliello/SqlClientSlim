@@ -3,24 +3,30 @@
   <PropertyGroup>
     <Configuration Condition="'$(Configuration)'==''">Windows_Debug</Configuration>
   </PropertyGroup>
-  <Import Project="$([MSBuild]::GetDirectoryNameOfFileAbove($(MSBuildThisFileDirectory), dir.props))\dir.props" />
+  <Import Project="..\..\dir.props" />
   <PropertyGroup>
     <ProjectGuid>{D4550556-4745-457F-BA8F-3EBF3836D6B4}</ProjectGuid>
     <AssemblyName>System.Data.SqlClient</AssemblyName>
-    <AssemblyVersion Condition="'$(TargetGroup)' == 'net451'">4.0.0.0</AssemblyVersion>
-    <AssemblyVersion Condition="'$(TargetGroup)' != 'net451'">4.1.0.0</AssemblyVersion>
+    <AssemblyVersion>4.1.0.0</AssemblyVersion>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <IsPartialFacadeAssembly Condition="'$(TargetGroup)' == 'net451' OR '$(TargetGroup)' == 'net46'">true</IsPartialFacadeAssembly>
-    <PackageTargetFramework Condition="'$(TargetGroup)' == 'net451'">net451</PackageTargetFramework>
-    <PackageTargetFramework Condition="'$(TargetGroup)' == ''">netstandard1.3</PackageTargetFramework>
-    <NuGetTargetMoniker Condition="'$(TargetGroup)' == ''">.NETStandard,Version=v1.3</NuGetTargetMoniker>
+    <PackageTargetFramework>netstandard1.3</PackageTargetFramework>
+    <NuGetTargetMoniker>.NETStandard,Version=v1.3</NuGetTargetMoniker>
+    <LangVersion>6</LangVersion>
   </PropertyGroup>
-  <PropertyGroup Condition=" '$(TargetsWindows)' != 'true' ">
+  <PropertyGroup>
     <DefineConstants>$(DefineConstants);MANAGED_SNI</DefineConstants>
   </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Windows_Debug|AnyCPU' ">
+    <TargetsWindows>true</TargetsWindows>
   </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Windows_Release|AnyCPU' ">
+    <TargetsWindows>true</TargetsWindows>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Unix_Debug|AnyCPU' ">
+    <TargetsWindows>false</TargetsWindows>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Unix_Release|AnyCPU' ">
+    <TargetsWindows>false</TargetsWindows>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Microsoft\SqlServer\Server\ITypedGettersV3.cs" />
@@ -45,7 +51,6 @@
     <Compile Include="System\Data\OperationAbortedException.cs" />
     <Compile Include="System\Data\RecordsAffectedEventArgs.cs" />
     <Compile Include="System\Data\RecordsAffectedEventHandler.cs" />
-    <Compile Include="System\Data\SqlClient\SqlDbColumn.cs" />
     <Compile Include="System\Data\SqlDbType.cs" />
     <Compile Include="System\Data\Common\ActivityCorrelator.cs" />
     <Compile Include="System\Data\Common\AdapterUtil.cs" />
@@ -149,21 +154,6 @@
     <Compile Include="$(CommonPath)\System\Data\Locale\Locale.cs">
       <Link>System\Data\Locale\Locale.cs</Link>
     </Compile>
-  </ItemGroup>
-  <ItemGroup Condition=" '$(TargetsWindows)' == 'true' And '$(IsPartialFacadeAssembly)' != 'true' ">
-    <Compile Include="$(CommonPath)\System\Data\Locale\LocaleMapper.Windows.cs">
-      <Link>System\Data\Locale\LocaleMapper.Windows.cs</Link>
-    </Compile>
-    <Compile Include="System\Data\ProviderBase\DbConnectionPoolIdentity.Windows.cs" />
-    <Compile Include="Interop\SNINativeMethodWrapper.Windows.cs" />
-    <Compile Include="System\Data\SqlClient\TdsParserSafeHandles.cs" />
-  </ItemGroup>
-  <ItemGroup Condition=" '$(TargetsWindows)' != 'true' And '$(IsPartialFacadeAssembly)' != 'true' ">
-    <Compile Include="$(CommonPath)\System\Data\Locale\LocaleMapper.Unix.cs">
-      <Link>System\Data\Locale\LocaleMapper.Unix.cs</Link>
-    </Compile>
-    <Compile Include="System\Data\ProviderBase\DbConnectionPoolIdentity.Unix.cs" />
-    <Compile Include="Interop\SNINativeMethodWrapper.Unix.cs" />
     <Compile Include="System\Data\SqlClient\SNI\SNIError.cs" />
     <Compile Include="System\Data\SqlClient\SNI\SNIHandle.cs" />
     <Compile Include="System\Data\SqlClient\SNI\SNIMarsConnection.cs" />
@@ -177,9 +167,19 @@
     <Compile Include="System\Data\SqlClient\SNI\SslOverTdsStream.cs" />
     <Compile Include="System\Data\SqlClient\SNI\SNICommon.cs" />
   </ItemGroup>
-  <ItemGroup Condition="'$(IsPartialFacadeAssembly)' == 'true'">
-    <TargetingPackReference Include="mscorlib" />
-    <TargetingPackReference Include="System.Data" />
+  <ItemGroup Condition=" '$(TargetsWindows)' == 'true'">
+    <Compile Include="$(CommonPath)\System\Data\Locale\LocaleMapper.Windows.cs">
+      <Link>System\Data\Locale\LocaleMapper.Windows.cs</Link>
+    </Compile>
+    <Compile Include="System\Data\ProviderBase\DbConnectionPoolIdentity.Windows.cs" />
+    <Compile Include="Interop\SNINativeMethodWrapper.Windows.cs" />
+  </ItemGroup>
+  <ItemGroup Condition=" '$(TargetsWindows)' != 'true'">
+    <Compile Include="$(CommonPath)\System\Data\Locale\LocaleMapper.Unix.cs">
+      <Link>System\Data\Locale\LocaleMapper.Unix.cs</Link>
+    </Compile>
+    <Compile Include="System\Data\ProviderBase\DbConnectionPoolIdentity.Unix.cs" />
+    <Compile Include="Interop\SNINativeMethodWrapper.Unix.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Package.nuspec">

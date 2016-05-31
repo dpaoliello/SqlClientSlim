@@ -17,22 +17,19 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StressTest", "StressTest\StressTest.csproj", "{33FFEBC4-6A56-40A2-9FB5-33F6FCC3FE85}"
 EndProject
 Global
-	GlobalSection(Performance) = preSolution
-		HasPerformanceSessions = true
-	EndGlobalSection
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{D4550556-4745-457F-BA8F-3EBF3836D6B4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{D4550556-4745-457F-BA8F-3EBF3836D6B4}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{D4550556-4745-457F-BA8F-3EBF3836D6B4}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{D4550556-4745-457F-BA8F-3EBF3836D6B4}.Release|Any CPU.Build.0 = Release|Any CPU
-		{BE51A9B7-B43D-4B00-826B-7E49E648E1F2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{BE51A9B7-B43D-4B00-826B-7E49E648E1F2}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{BE51A9B7-B43D-4B00-826B-7E49E648E1F2}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{BE51A9B7-B43D-4B00-826B-7E49E648E1F2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D4550556-4745-457F-BA8F-3EBF3836D6B4}.Debug|Any CPU.ActiveCfg = Windows_Debug|Any CPU
+		{D4550556-4745-457F-BA8F-3EBF3836D6B4}.Debug|Any CPU.Build.0 = Windows_Debug|Any CPU
+		{D4550556-4745-457F-BA8F-3EBF3836D6B4}.Release|Any CPU.ActiveCfg = Windows_Release|Any CPU
+		{D4550556-4745-457F-BA8F-3EBF3836D6B4}.Release|Any CPU.Build.0 = Windows_Release|Any CPU
+		{BE51A9B7-B43D-4B00-826B-7E49E648E1F2}.Debug|Any CPU.ActiveCfg = Windows_Debug|Any CPU
+		{BE51A9B7-B43D-4B00-826B-7E49E648E1F2}.Debug|Any CPU.Build.0 = Windows_Debug|Any CPU
+		{BE51A9B7-B43D-4B00-826B-7E49E648E1F2}.Release|Any CPU.ActiveCfg = Windows_Release|Any CPU
+		{BE51A9B7-B43D-4B00-826B-7E49E648E1F2}.Release|Any CPU.Build.0 = Windows_Release|Any CPU
 		{37515F41-71B2-4AFC-AD6A-B4CE1928C7D5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{37515F41-71B2-4AFC-AD6A-B4CE1928C7D5}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{37515F41-71B2-4AFC-AD6A-B4CE1928C7D5}.Release|Any CPU.ActiveCfg = Release|Any CPU

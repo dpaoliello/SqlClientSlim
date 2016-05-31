@@ -462,7 +462,7 @@ namespace System.Data.SqlClient.SNI
                     return SendAckIfNecessary();
                 }
 
-                if (!_packetEvent.Wait(timeoutInMilliseconds))
+                if (!_packetEvent.Wait(timeout))
                 {
                     return new SNIError(SNIProviders.SMUX_PROV, 0, SNICommon.ConnTimeoutError, string.Empty);
                 }

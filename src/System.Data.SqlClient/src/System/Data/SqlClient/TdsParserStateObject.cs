@@ -8,19 +8,16 @@
 
 using System.Collections.Generic;
 using System.Data.Common;
+using System.Data.SqlClient.Resources;
+using System.Data.SqlClient.SNI;
 using System.Diagnostics;
 using System.Globalization;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Text;
-#if MANAGED_SNI
-using System.Data.SqlClient.SNI;
-#endif
 
 namespace System.Data.SqlClient
 {
-    using Res = System.SR;
-
     sealed internal class LastIOTimer
     {
         internal long _value;

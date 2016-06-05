@@ -6,22 +6,19 @@
 
 //------------------------------------------------------------------------------
 
+using Microsoft.SqlServer.Server;
 using System.Collections.Generic;
 using System.Data.Common;
+using System.Data.SqlClient.Resources;
 using System.Data.SqlTypes;
 using System.Diagnostics;
-using System.IO;
 using System.Globalization;
-using System.Reflection;
+using System.IO;
 using System.Xml;
 using MSS = Microsoft.SqlServer.Server;
 
-using Microsoft.SqlServer.Server;
-
 namespace System.Data.SqlClient
 {
-    using Res = System.SR;
-
     internal abstract class DataFeed
     {
     }

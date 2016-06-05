@@ -4,7 +4,7 @@
 
 using System.Collections;
 using System.Collections.Generic;
-using System.Data.Common;
+using System.Data.SqlClient.Resources;
 using System.Diagnostics;
 
 namespace System.Data.SqlClient
@@ -205,7 +205,7 @@ namespace System.Data.SqlClient
             // This throws on full framework, so it will also throw here.
             if (!removed)
             {
-                throw new ArgumentException(SR.Arg_RemoveArgNotFound);
+                throw new ArgumentException(Res.Arg_RemoveArgNotFound);
             }
         }
 

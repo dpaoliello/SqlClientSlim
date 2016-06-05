@@ -22,7 +22,8 @@ namespace System.Data.SqlClient.SNI
 
         public SNIError(SNIProviders provider, uint nativeError, uint sniErrorCode, string errorMessage)
         {
-            Debug.Assert(errorMessage != null && errorMessage.Length > 0);
+            Debug.Assert(errorMessage != null);
+            Debug.Assert((errorMessage.Length > 0) || sniErrorCode != 0);
 
             this.lineNumber = 0;
             this.function = string.Empty;

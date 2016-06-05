@@ -6,11 +6,11 @@
 //------------------------------------------------------------------------------
 
 
-using System.Diagnostics;
 using System.Data.Common;
+using System.Data.SqlClient.Resources;
+using System.Diagnostics;
 using System.IO;
 using System.Runtime.CompilerServices;
-using Res = System.SR;
 
 namespace System.Data.SqlTypes
 {

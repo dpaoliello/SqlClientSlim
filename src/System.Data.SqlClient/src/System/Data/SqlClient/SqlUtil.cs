@@ -7,6 +7,7 @@
 //------------------------------------------------------------------------------
 
 using System.Data.Common;
+using System.Data.SqlClient.Resources;
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.CompilerServices;
@@ -17,8 +18,6 @@ using System.Threading.Tasks;
 
 namespace System.Data.SqlClient
 {
-    using Res = System.SR;
-
     static internal class AsyncHelper
     {
         internal static Task CreateContinuationTask(Task task, Action onSuccess, SqlInternalConnectionTds connectionToDoom = null, Action<Exception> onFailure = null)
@@ -783,7 +782,7 @@ namespace System.Data.SqlClient
             Debug.Assert(sniError > 0 && sniError <= (int)SNINativeMethodWrapper.SniSpecialErrors.MaxErrorValue, "SNI error is out of range");
 
             string errorMessageId = String.Format((IFormatProvider)null, "SNI_ERROR_{0}", sniError);
-            return SR.GetResourceString(errorMessageId, errorMessageId);
+            return Res.GetResourceString(errorMessageId);
         }
     }
 

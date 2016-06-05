@@ -6,19 +6,15 @@
 
 //------------------------------------------------------------------------------
 
-
-using System.Collections;
 using System.Collections.Generic;
 using System.Data.Common;
+using System.Data.SqlClient.Resources;
 using System.Data.SqlTypes;
 using System.Diagnostics;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Xml;
-
-using Res = System.SR;
-
 
 namespace System.Data.SqlClient
 {

@@ -9,14 +9,13 @@
 using System;
 using System.Data;
 using System.Data.Common;
-using System.Globalization;
-using System.Data.SqlTypes;
 using System.Data.SqlClient;
+using System.Data.SqlClient.Resources;
+using System.Data.SqlTypes;
+using System.Globalization;
 
 namespace Microsoft.SqlServer.Server
 {
-    using Res = System.SR;
-
     // class SqlMetaData
     //   Simple immutable implementation of the a metadata-holding class.  Only
     //    complexities are:

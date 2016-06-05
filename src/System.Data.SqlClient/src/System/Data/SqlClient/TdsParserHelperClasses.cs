@@ -13,9 +13,6 @@ using System.Data.SqlTypes;
 using System.Diagnostics;
 using System.Text;
 
-using Res = System.SR;
-
-
 namespace System.Data.SqlClient
 {
     internal enum CallbackType : byte

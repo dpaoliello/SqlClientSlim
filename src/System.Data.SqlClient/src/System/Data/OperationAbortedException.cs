@@ -6,8 +6,7 @@
 
 //------------------------------------------------------------------------------
 
-using Res = System.SR;
-
+using System.Data.SqlClient.Resources;
 
 namespace System.Data
 {

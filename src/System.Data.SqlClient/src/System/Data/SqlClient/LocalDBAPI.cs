@@ -5,14 +5,13 @@
 
 //------------------------------------------------------------------------------
 
-using System.Threading;
-using System.Runtime.InteropServices;
-using System.Globalization;
 using System.Data.SqlClient;
-using System.Text;
+using System.Data.SqlClient.Resources;
 using System.Diagnostics;
-using Res = System.SR;
-
+using System.Globalization;
+using System.Runtime.InteropServices;
+using System.Text;
+using System.Threading;
 
 namespace System.Data
 {

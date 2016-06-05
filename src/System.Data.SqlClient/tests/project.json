@@ -1,24 +1,27 @@
 {
+  "version": "1.0.0-*",
+
+  "testRunner": "xunit",
+
   "dependencies": {
-    "Microsoft.CSharp": "4.0.1-rc3-24105-00",
-    "Microsoft.NETCore.Console": "1.0.0-rc3-24105-00",
-    "Microsoft.NETCore.Platforms": "1.0.1-rc3-24105-00",
-    "Microsoft.NETCore.TestHost": "1.0.0-rc3-24105-00",
-    "System.Data.Common": "4.0.1-rc3-24105-00",
-    "System.Text.RegularExpressions": "4.1.0-rc3-24105-00",
-    "System.Xml.ReaderWriter": "4.0.11-rc3-24105-00",
     "xunit": "2.1.0",
-    "xunit.netcore.extensions": "1.0.0-prerelease-00312-04",
-    "xunit.console.netcore": "1.0.2-prerelease-00101",
-    "xunit.runner.utility": "2.1.0"
+    "src": "0.2.0-*",
+    "dotnet-test-xunit": "1.0.0-rc2-build10025"
   },
+
   "frameworks": {
-    "dnxcore50": {
-      "imports": "portable-net45+win8"
+    "netcoreapp1.0": {
+      "imports": [
+        "dnxcore50",
+        "portable-net45+win8"
+      ],
+
+      "dependencies": {
+        "Microsoft.NETCore.App": {
+          "version": "1.0.0-rc2-3002702",
+          "type": "platform"
+        }
+      }
     }
-  },
-  "runtimes": {
-    "win7-x86": {},
-    "win7-x64": {}
   }
 }

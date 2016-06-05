@@ -9,6 +9,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Data.Common;
+using System.Data.SqlClient.Resources;
 using System.Diagnostics;
 
 namespace System.Data.SqlClient
@@ -287,11 +288,11 @@ namespace System.Data.SqlClient
                 if (array == null)
                     throw new ArgumentNullException(nameof(array));
                 if (array.Rank != 1)
-                    throw new ArgumentException(SR.Arg_RankMultiDimNotSupported);
+                    throw new ArgumentException(Res.Arg_RankMultiDimNotSupported);
                 if (arrayIndex < 0)
-                    throw new ArgumentOutOfRangeException(nameof(arrayIndex), SR.ArgumentOutOfRange_NeedNonNegNum);
+                    throw new ArgumentOutOfRangeException(nameof(arrayIndex), Res.ArgumentOutOfRange_NeedNonNegNum);
                 if (array.Length - arrayIndex < Count)
-                    throw new ArgumentException(SR.Arg_ArrayPlusOffTooSmall);
+                    throw new ArgumentException(Res.Arg_ArrayPlusOffTooSmall);
             }
 
             private sealed class Collection : ICollection

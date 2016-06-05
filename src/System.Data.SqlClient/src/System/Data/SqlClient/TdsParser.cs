@@ -8,6 +8,8 @@
 
 using System.Collections.Generic;
 using System.Data.Common;
+using System.Data.SqlClient.Resources;
+using System.Data.SqlClient.SNI;
 using System.Data.SqlTypes;
 using System.Diagnostics;
 using System.Globalization;
@@ -16,11 +18,6 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Xml;
-using Res = System.SR;
-#if MANAGED_SNI
-using System.Data.SqlClient.SNI;
-#endif
-
 using MSS = Microsoft.SqlServer.Server;
 
 namespace System.Data.SqlClient
@@ -1124,16 +1121,16 @@ namespace System.Data.SqlClient
             Debug.Assert(SniContext.Undefined != stateObj.DebugOnlyCopyOfSniContext || ((_fMARS) && ((_state == TdsParserState.Closed) || (_state == TdsParserState.Broken))), "SniContext must not be None");
 #endif
 
-            string errorMessage = sniError.errorMessage ?? sniError.exception.Message;
+            string errorMessage = sniError.errorMessage;
 #if MANAGED_SNI
             Debug.Assert(!string.IsNullOrEmpty(errorMessage) || sniError.sniError != 0, "Empty error message received from SNI");
 #else
             Debug.Assert(!string.IsNullOrEmpty(errorMessage), "Empty error message received from SNI");
 #endif
 
-            string sqlContextInfo = SR.GetResourceString(Enum.GetName(typeof(SniContext), stateObj.SniContext), Enum.GetName(typeof(SniContext), stateObj.SniContext));
+            string sqlContextInfo = Res.GetResourceString(Enum.GetName(typeof(SniContext), stateObj.SniContext));
             string providerRid = String.Format((IFormatProvider)null, "SNI_PN{0}", (int)sniError.provider);
-            string providerName = SR.GetResourceString(providerRid, providerRid);
+            string providerName = Res.GetResourceString(providerRid);
             Debug.Assert(!string.IsNullOrEmpty(providerName), String.Format((IFormatProvider)null, "invalid providerResourceId '{0}'", providerRid));
             uint win32ErrorCode = sniError.nativeError;
 

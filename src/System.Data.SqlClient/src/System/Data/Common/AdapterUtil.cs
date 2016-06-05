@@ -4,20 +4,19 @@
 
 using System.Collections;
 using System.Collections.Generic;
+using System.Data.SqlClient.Resources;
 using System.Data.SqlTypes;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
-using System.Security;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
+using System.Security;
 using System.Text;
 using System.Threading.Tasks;
-using Res = System.SR;
 
-namespace System
+namespace System.Data.SqlClient.Resources
 {
-    internal static partial class SR
+    internal partial class Res
     {
         internal static string GetString(string value)
         {
@@ -26,7 +25,12 @@ namespace System
 
         internal static string GetString(string format, params object[] args)
         {
-            return SR.Format(format, args);
+            return string.Format(format, args);
+        }
+
+        internal static string GetResourceString(string name)
+        {
+            return ResourceManager.GetString(name);
         }
     }
 }
@@ -1048,16 +1052,10 @@ namespace System.Data.Common
         }
 
 
-        private static Version s_systemDataVersion;
+        private static readonly Version s_systemDataVersion = new Version(1, 0, 0);
 
-        static internal Version GetAssemblyVersion()
+        internal static Version GetAssemblyVersion()
         {
-            // NOTE: Using lazy thread-safety since we don't care if two threads both happen to update the value at the same time
-            if (s_systemDataVersion == null)
-            {
-                s_systemDataVersion = new Version(ThisAssembly.InformationalVersion);
-            }
-
             return s_systemDataVersion;
         }
     }

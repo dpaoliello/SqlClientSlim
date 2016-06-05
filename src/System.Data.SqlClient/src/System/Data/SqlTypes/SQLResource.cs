@@ -7,13 +7,10 @@
 
 //------------------------------------------------------------------------------
 
-
-
+using System.Data.SqlClient.Resources;
 
 namespace System.Data.SqlTypes
 {
-    using Res = System.SR;
-
     internal static class SQLResource
     {
         internal static string NullString => Res.SqlMisc_NullString;

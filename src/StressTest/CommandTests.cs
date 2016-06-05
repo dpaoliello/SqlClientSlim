@@ -55,7 +55,7 @@ namespace StressTest
                     if (RandomHelper.NextBoolWithProbability(95))
                     {
                         // 95%: Close the reader
-                        dataReader.Close();
+                        dataReader.Dispose();
                     }
                 }
             }

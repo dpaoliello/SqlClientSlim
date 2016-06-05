@@ -24,7 +24,7 @@ namespace PerfTest
         {
             _workCompletedBarrier = new Barrier(threadCount + 1);
             _workReadyEvent = new ManualResetEventSlim();
-            Thread.MemoryBarrier();
+            Interlocked.MemoryBarrier();
 
             _threads = new Thread[threadCount];
             for (int i = 0; i < threadCount; i++)

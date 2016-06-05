@@ -9,7 +9,7 @@
       "type": "platform",
       "version": "1.0.0-rc2-3002702"
     },
-    "src": "0.2.0-*",
+    "System.Data.SqlClient": "0.2.0-*",
     "System.Diagnostics.TraceSource": "4.0.0-rc2-24027"
   },
 

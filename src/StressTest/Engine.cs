@@ -24,9 +24,6 @@ namespace StressTest
         {
             long tasksCompleted = 0;
 
-            // Prep the threadpool
-            ThreadPool.SetMinThreads(threadCount * 2, threadCount);
-
             // Start the tasks
             Task[] workerTasks = new Task[threadCount];
             CancellationTokenSource[] workerCancellationSources = new CancellationTokenSource[threadCount];

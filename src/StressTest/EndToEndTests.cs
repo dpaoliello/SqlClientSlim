@@ -10,22 +10,19 @@ namespace StressTest
     public static class EndToEndTests
     {
         private const string NonPooledFragment = "pooling=false;";
-        private const string MarsFragment = "multipleactiveresultsets=true";
+        private const string PooledFragment = "max pool size=1000;";
+        private const string MarsFragment = "multipleactiveresultsets=true;";
+        private const string SqlAuthFragment = "user id=sa;password=452g34f23t4324t2g43t;";
 
-        private const string SqlAuthConnectionString = "server=localhost;user id=sa;password=452g34f23t4324t2g43t;max pool size=1000;";
-        private const string SqlAuthNonPooledConnectionString = SqlAuthConnectionString + NonPooledFragment;
+        private const string TcpFragment = "server=tcp:localhost;";
+        private const string NpFragment = "server=np:localhost;";
 
         /// <summary>
         /// Set of tests with SQL Auth
         /// </summary>
         public static async Task SqlAuthConnectionTest(CancellationToken cancellationToken)
         {
-            // 80% chance of pooling
-            string connectionString = RandomHelper.NextBoolWithProbability(80) ?
-                SqlAuthConnectionString :
-                SqlAuthNonPooledConnectionString;
-
-            var connection = new SqlConnection(connectionString);
+            var connection = new SqlConnection(CreateBaseConnectionString());
             try
             {
                 if (await TryOpenConnectionAsync(connection, cancellationToken))
@@ -48,7 +45,7 @@ namespace StressTest
         /// </summary>
         public static async Task MarsConnectionTest(CancellationToken cancellationToken)
         {
-            var connection = new SqlConnection(SqlAuthConnectionString + MarsFragment);
+            var connection = new SqlConnection(CreateBaseConnectionString() + MarsFragment);
             try
             {
                 if (await TryOpenConnectionAsync(connection, cancellationToken))
@@ -70,6 +67,29 @@ namespace StressTest
                     connection.Close();
                 }
             }
+        }
+
+        /// <summary>
+        /// Creates a basic connection string
+        /// </summary>
+        /// <remarks>
+        /// Chooses between:
+        /// * TCP vs Named Pipes
+        /// * Pooled or not pooled
+        /// </remarks>
+        private static string CreateBaseConnectionString()
+        {
+            // Equal change of TCP and Named Pipes
+            string connectionString = RandomHelper.NextBoolWithProbability(80) ?
+                TcpFragment :
+                NpFragment;
+
+            // 80% chance of pooling
+            connectionString += RandomHelper.NextBoolWithProbability(80) ?
+                PooledFragment :
+                NonPooledFragment;
+
+            return connectionString;
         }
 
         /// <summary>

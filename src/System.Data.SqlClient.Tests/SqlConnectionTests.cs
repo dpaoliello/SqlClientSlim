@@ -18,6 +18,18 @@ namespace System.Data.SqlClient.Tests
                 await RunBasicQueryAsync(connection);
             }
         }
+        /// <summary>
+        /// Verifies that connecting using SQL auth works with Named Pipes
+        /// </summary>
+        [Fact]
+        public async Task SqlAuthWithNamedPipesConnectionTest()
+        {
+            using (var connection = new SqlConnection(Utilities.ServerOnlyWithNamedPipesConnectionString))
+            {
+                await connection.OpenAsync();
+                await RunBasicQueryAsync(connection);
+            }
+        }
 
         /// <summary>
         /// Verifies that connecting using integrated auth works

@@ -6,8 +6,13 @@ namespace System.Data.SqlClient.Tests
 {
     internal static class Utilities
     {
+        private const string SqlAuthFragment = "user id=sa;password=452g34f23t4324t2g43t;";
+
         public const string ServerOnlyConnectionString = "server=localhost;";
-        public const string SqlAuthConnectionString = ServerOnlyConnectionString + "user id=sa;password=452g34f23t4324t2g43t;";
+        public const string ServerOnlyWithNamedPipesConnectionString = "server=np:localhost";
+
+        public const string SqlAuthConnectionString = ServerOnlyConnectionString + SqlAuthFragment;
+        public const string SqlAuthNamesPipesConnectionString = ServerOnlyWithNamedPipesConnectionString + SqlAuthFragment;
         public const string IntegratedAuthConnectionString = ServerOnlyConnectionString + "integrated security=true;";
 
         public static Task KillConnection(SqlConnection connection)

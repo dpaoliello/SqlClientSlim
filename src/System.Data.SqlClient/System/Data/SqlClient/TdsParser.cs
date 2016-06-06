@@ -1121,24 +1121,30 @@ namespace System.Data.SqlClient
             Debug.Assert(SniContext.Undefined != stateObj.DebugOnlyCopyOfSniContext || ((_fMARS) && ((_state == TdsParserState.Closed) || (_state == TdsParserState.Broken))), "SniContext must not be None");
 #endif
 
-            string errorMessage = sniError.errorMessage;
-#if MANAGED_SNI
-            Debug.Assert(!string.IsNullOrEmpty(errorMessage) || sniError.sniError != 0, "Empty error message received from SNI");
-#else
-            Debug.Assert(!string.IsNullOrEmpty(errorMessage), "Empty error message received from SNI");
-#endif
-
             string sqlContextInfo = Res.GetResourceString(Enum.GetName(typeof(SniContext), stateObj.SniContext));
             string providerRid = String.Format((IFormatProvider)null, "SNI_PN{0}", (int)sniError.provider);
             string providerName = Res.GetResourceString(providerRid);
             Debug.Assert(!string.IsNullOrEmpty(providerName), String.Format((IFormatProvider)null, "invalid providerResourceId '{0}'", providerRid));
             uint win32ErrorCode = sniError.nativeError;
 
-            if (sniError.sniError == 0)
+            string errorMessage;
+            if (sniError.exception != null)
+            {
+                if (sniError.exception is AggregateException)
+                {
+                    errorMessage = sniError.exception.InnerException.Message;
+                }
+                else
+                {
+                    errorMessage = sniError.exception.Message;
+                }
+            }
+            else if (sniError.sniError == 0)
             {
                 // Provider error. The message from provider is preceded with non-localizable info from SNI
                 // strip provider info from SNI
                 //
+                errorMessage = sniError.errorMessage;
                 int iColon = errorMessage.IndexOf(':');
                 Debug.Assert(0 <= iColon, "':' character missing in sni errorMessage");
                 Debug.Assert(errorMessage.Length > iColon + 1 && errorMessage[iColon + 1] == ' ', "Expecting a space after the ':' character");

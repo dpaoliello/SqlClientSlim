@@ -589,7 +589,6 @@ namespace System.Data.SqlClient.SNI
             return ReportTcpSNIError(0, 0, errorMessage);
         }
 
-#if DEBUG
         /// <summary>
         /// Test handle for killing underlying connection
         /// </summary>
@@ -597,6 +596,5 @@ namespace System.Data.SqlClient.SNI
         {
             _socket.Shutdown(SocketShutdown.Both);
         }
-#endif
     }
 }

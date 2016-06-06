@@ -134,7 +134,6 @@ namespace System.Data.SqlClient.Tests
             }
         }
 
-#if DEBUG
         /// <summary>
         /// Verifies that connections are checked/"repaired" when the connection is pulled out of the pool
         /// </summary>
@@ -175,7 +174,6 @@ namespace System.Data.SqlClient.Tests
                 Assert.NotEqual(connectionId, connection.ClientConnectionId);
             }
         }
-#endif
 
         /// <summary>
         /// Runs a basic query (SELECT 1) on the given connection

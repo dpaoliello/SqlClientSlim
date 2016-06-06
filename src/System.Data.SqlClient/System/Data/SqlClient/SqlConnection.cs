@@ -1099,15 +1099,13 @@ namespace System.Data.SqlClient
             Statistics.UpdateStatistics();
         }
 
-#if DEBUG
         /// <summary>
         /// TEST ONLY: Kills the underlying connection (without any checks)
         /// </summary>
-        public void KillConnection()
+        internal void KillConnection()
         {
             GetOpenTdsConnection().Parser._physicalStateObj.Handle.KillConnection();
         }
-#endif
     } // SqlConnection
 } // System.Data.SqlClient namespace
 

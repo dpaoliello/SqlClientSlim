@@ -300,7 +300,6 @@ namespace System.Data.SqlClient.SNI
             _bufferSize = bufferSize;
         }
 
-#if DEBUG
         /// <summary>
         /// Test handle for killing underlying connection
         /// </summary>
@@ -309,6 +308,5 @@ namespace System.Data.SqlClient.SNI
             _pipeStream.Dispose();
             _pipeStream = null;
         }
-#endif
     }
 }

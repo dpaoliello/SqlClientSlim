@@ -81,12 +81,10 @@ namespace System.Data.SqlClient.SNI
         /// </summary>
         public abstract Guid ConnectionId { get; }
 
-#if DEBUG
         /// <summary>
         /// Test handle for killing underlying connection
         /// </summary>
         public abstract void KillConnection();
-#endif
 
         protected struct DebugLock
         {

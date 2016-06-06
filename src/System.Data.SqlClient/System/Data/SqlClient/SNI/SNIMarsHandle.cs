@@ -512,7 +512,6 @@ namespace System.Data.SqlClient.SNI
             _connection.DisableSsl();
         }
 
-#if DEBUG
         /// <summary>
         /// Test handle for killing underlying connection
         /// </summary>
@@ -520,6 +519,5 @@ namespace System.Data.SqlClient.SNI
         {
             _connection.KillConnection();
         }
-#endif
     }
 }

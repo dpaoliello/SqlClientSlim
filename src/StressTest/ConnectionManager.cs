@@ -35,7 +35,6 @@ namespace StressTest
         /// </summary>
         public bool IsMarsEnabled { get; }
 
-#if DEBUG
         /// <summary>
         /// Kills the managed connection.
         /// </summary>
@@ -45,11 +44,10 @@ namespace StressTest
 
             try
             {
-                _connection.KillConnection();
+               _connection.KillConnection();
             }
             catch (InvalidOperationException ex) when (ex.Message == "Invalid operation. The connection is closed.")
             { }
         }
-#endif
     }
 }

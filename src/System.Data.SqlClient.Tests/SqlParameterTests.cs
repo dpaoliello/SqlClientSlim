@@ -21,7 +21,7 @@ namespace System.Data.SqlClient.Tests
             yield return new object[] { new SqlString(testString), testString };
             yield return new object[] { testString.ToCharArray(), testString };
             yield return new object[] { new SqlChars(testString.ToCharArray()), testString };
-            yield return new object[] { new StringReader(testString), "\uFEFF" + testString };
+            yield return new object[] { new StringReader(testString), testString };
             yield return new object[] { 1234, "1234" };
         }
 
@@ -119,7 +119,8 @@ namespace System.Data.SqlClient.Tests
         /// </summary>
         private static async Task CoercionTestRunner<T>(SqlDbType parameterType, object inputValue, T expectedOutputValue)
         {
-            Assert.Equal(expectedOutputValue, await ParameterRoundTrip<T>(parameterType, inputValue));
+            T actualOutputValue = await ParameterRoundTrip<T>(parameterType, inputValue);
+            Assert.Equal(expectedOutputValue, actualOutputValue);
         }
 
         /// <summary>
@@ -127,7 +128,8 @@ namespace System.Data.SqlClient.Tests
         /// </summary>
         private static async Task CoercionTestRunner<T>(SqlDbType parameterType, object inputValue, T[] expectedOutputValue)
         {
-            Assert.Equal<T>(expectedOutputValue, await ParameterRoundTrip<T[]>(parameterType, inputValue));
+            T[] actualOutputValue = await ParameterRoundTrip<T[]>(parameterType, inputValue);
+            Assert.Equal<T>(expectedOutputValue, actualOutputValue);
         }
 
         /// <summary>

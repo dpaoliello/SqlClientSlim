@@ -21,13 +21,11 @@ namespace StressTest
         {
             command.CommandText = "SELECT 1";
 
-#if DEBUG
             if (RandomHelper.NextBoolWithProbability(1))
             {
                 // 1%: Kill the connection
                 connectionManager.KillConnection();
             }
-#endif
 
             if (RandomHelper.NextBoolWithProbability(10))
             {

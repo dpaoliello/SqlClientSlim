@@ -1,5 +1,5 @@
 {
-  "projects": [ "src", "test", "." ],
+  "projects": [ "PerfTest", "StressTest", "System.Data.SqlClient", "System.Data.SqlClient.Tests" ],
   "sdk": {
     "version": "1.0.0-preview1-002702"
   }

@@ -29,7 +29,13 @@ namespace StressTest
                 Console.WriteLine($"Completed {count}. Time {watch.ElapsedMilliseconds}ms");
                 watch.Restart();
             };
-            Engine.Run(threadCount, reportStatusAction, stopEngineSource.Token);
+
+            try
+            {
+                Engine.Run(threadCount, reportStatusAction, stopEngineSource.Token);
+            }
+            catch (OperationCanceledException)
+            { }
         }
     }
 }

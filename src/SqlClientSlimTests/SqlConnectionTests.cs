@@ -51,9 +51,12 @@ namespace System.Data.SqlClient.Tests
         {
             Guid connectionId = Guid.Empty;
 
+            // Need to guarantee a fresh connection pool, so use a unique connection string
+            string connectionString = Utilities.SqlAuthConnectionString + "Application Name=" + Guid.NewGuid().ToString();
+
             for (int i = 0; i < 10; i++)
             {
-                using (var connection = new SqlConnection(Utilities.SqlAuthConnectionString))
+                using (var connection = new SqlConnection(connectionString))
                 {
                     await connection.OpenAsync();
 

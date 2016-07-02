@@ -1,5 +1,5 @@
 {
-  "projects": [ "PerfTest", "PerfTest/Slim", "StressTest", "SqlClientSlim", "SqlClientSlimTests", "." ],
+  "projects": [ "SqlClientSlim", "PerfTest", "PerfTest/Slim", "StressTest", "SqlClientSlimTests", "." ],
   "sdk": {
     "version": "1.0.0-preview1-002702"
   }

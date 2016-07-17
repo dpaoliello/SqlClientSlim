@@ -1,4 +1,7 @@
-﻿using System.Data.SqlClient;
+﻿using System;
+using System.Data.SqlClient;
+using System.Diagnostics;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -79,17 +82,20 @@ namespace StressTest
         /// </remarks>
         private static string CreateBaseConnectionString()
         {
+            // Always use SqlAuth
+            StringBuilder connectionStringBuilder = new StringBuilder(SqlAuthFragment);
+
             // Equal change of TCP and Named Pipes
-            string connectionString = RandomHelper.NextBoolWithProbability(80) ?
+            connectionStringBuilder.Append(RandomHelper.NextBoolWithProbability(50) ?
                 TcpFragment :
-                NpFragment;
+                NpFragment);
 
             // 80% chance of pooling
-            connectionString += RandomHelper.NextBoolWithProbability(80) ?
+            connectionStringBuilder.Append(RandomHelper.NextBoolWithProbability(80) ?
                 PooledFragment :
-                NonPooledFragment;
+                NonPooledFragment);
 
-            return connectionString;
+            return connectionStringBuilder.ToString();
         }
 
         /// <summary>
@@ -104,6 +110,12 @@ namespace StressTest
             }
             catch (TaskCanceledException) when (cancellationToken.IsCancellationRequested)
             { }
+            catch (Exception ex)
+            {
+                // Unknown error
+                Debug.Assert(false, $"Unknown error during connection open: {ex.Message}");
+                throw;
+            }
 
             // Fallthrough: Failure
             return false;

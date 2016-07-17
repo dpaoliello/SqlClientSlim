@@ -133,7 +133,7 @@ namespace StressTest
             catch (Exception ex)
             {
                 // Unknown error
-                Debug.Assert(false, $"Unknown error: {ex.Message}");
+                Debug.Assert(false, $"Unknown error during command execution: {ex.Message}");
                 throw;
             }
 

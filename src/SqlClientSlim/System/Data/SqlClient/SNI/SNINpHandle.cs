@@ -1,7 +1,6 @@
 using System.IO;
 using System.IO.Pipes;
 using System.Net.Security;
-using System.Net.Sockets;
 using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
@@ -11,37 +10,19 @@ namespace System.Data.SqlClient.SNI
     /// <summary>
     /// Named Pipe connection handle
     /// </summary>
-    internal class SNINpHandle : SNIHandle
+    internal class SNINpHandle : SNITransportHandle
     {
         internal const string DefaultPipePath = @"sql\query"; // e.g. \\HOSTNAME\pipe\sql\query
         private const int MAX_PIPE_INSTANCES = 255;
 
-        private readonly string _targetServer;
-        private readonly object _callbackObject;
-        private readonly TaskScheduler _writeScheduler;
-        private readonly TaskFactory _writeTaskFactory;
-
-        private Stream _stream;
         private NamedPipeClientStream _pipeStream;
-        private SslOverTdsStream _sslOverTdsStream;
-        private SslStream _sslStream;
-        private SNIAsyncCallback _receiveCallback;
-        private SNIAsyncCallback _sendCallback;
-
-        private bool _validateCert = true;
-        private int _bufferSize = TdsEnums.DEFAULT_LOGIN_PACKET_SIZE;
-        private readonly Guid _connectionId = Guid.NewGuid();
 
         public SNINpHandle(string serverName, string pipeName, long timerExpire, object callbackObject, out SNIError error)
+            : base(serverName, callbackObject)
         {
-            _targetServer = serverName;
-            _callbackObject = callbackObject;
-            _writeScheduler = new ConcurrentExclusiveSchedulerPair().ExclusiveScheduler;
-            _writeTaskFactory = new TaskFactory(_writeScheduler);
-
             try
             {
-                _pipeStream = new NamedPipeClientStream(serverName, pipeName, PipeDirection.InOut, PipeOptions.WriteThrough, Security.Principal.TokenImpersonationLevel.None);
+                _pipeStream = new NamedPipeClientStream(serverName, pipeName, PipeDirection.InOut, PipeOptions.WriteThrough | PipeOptions.Asynchronous);
 
                 bool isInfiniteTimeOut = long.MaxValue == timerExpire;
                 if (isInfiniteTimeOut)
@@ -95,7 +76,7 @@ namespace System.Data.SqlClient.SNI
 
         public override void Dispose()
         {
-            lock (this)
+            using (_debugLock.Acquire(this))
             {
                 if (_sslOverTdsStream != null)
                 {
@@ -119,7 +100,7 @@ namespace System.Data.SqlClient.SNI
 
         public override SNIError Receive(ref SNIPacket packet, int timeout)
         {
-            lock (this)
+            using (_debugLock.Acquire(this))
             {
                 packet = null;
                 try
@@ -195,14 +176,12 @@ namespace System.Data.SqlClient.SNI
         public override bool SendAsync(SNIPacket packet, SNIAsyncCallback callback, bool forceCallback, out SNIError error)
         {
             SNIPacket newPacket = packet;
-
-            _writeTaskFactory.StartNew(() =>
-            {
+            
                 try
                 {
                     using (_debugLock.Acquire(this))
                     {
-                        packet.WriteToStream(_stream);
+                        packet.WriteToStreamAsync(_stream);
                     }
                 }
                 catch (Exception e)
@@ -229,11 +208,12 @@ namespace System.Data.SqlClient.SNI
                 {
                     _sendCallback(packet, null);
                 }
-            });
 
             error = null;
             return false;
         }
+
+        private void SendAsyncContinuation()
 
         public override void SetAsyncCallbacks(SNIAsyncCallback receiveCallback, SNIAsyncCallback sendCallback)
         {
@@ -306,7 +286,6 @@ namespace System.Data.SqlClient.SNI
         public override void KillConnection()
         {
             _pipeStream.Dispose();
-            _pipeStream = null;
         }
     }
 }

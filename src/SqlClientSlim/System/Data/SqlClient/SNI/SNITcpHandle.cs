@@ -19,22 +19,10 @@ namespace System.Data.SqlClient.SNI
     /// <summary>
     /// TCP connection handle
     /// </summary>
-    internal class SNITCPHandle : SNIHandle
+    internal class SNITCPHandle : SNITransportHandle
     {
-        private readonly string _targetServer;
-        private readonly object _callbackObject;
         private readonly Socket _socket;
         private readonly NetworkStream _tcpStream;
-
-        private Stream _stream;
-        private SslStream _sslStream;
-        private SslOverTdsStream _sslOverTdsStream;
-        private SNIAsyncCallback _receiveCallback;
-        private SNIAsyncCallback _sendCallback;
-
-        private bool _validateCert = true;
-        private int _bufferSize = TdsEnums.DEFAULT_LOGIN_PACKET_SIZE;
-        private Guid _connectionId = Guid.NewGuid();
 
         private const int MaxParallelIpAddresses = 64;
 
@@ -78,10 +66,8 @@ namespace System.Data.SqlClient.SNI
         /// <param name="timerExpire">Connection timer expiration</param>
         /// <param name="callbackObject">Callback object</param>
         public SNITCPHandle(string serverName, int port, long timerExpire, object callbackObject, bool parallel, out SNIError sniError)
+            : base(serverName, callbackObject)
         {
-            _callbackObject = callbackObject;
-            _targetServer = serverName;
-
             try
             {
                 TimeSpan ts;

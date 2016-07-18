@@ -9,7 +9,7 @@ namespace System.Data.SqlClient.Tests
         private const string SqlAuthFragment = "user id=sa;password=452g34f23t4324t2g43t;";
 
         public const string ServerOnlyConnectionString = "server=localhost;";
-        public const string ServerOnlyWithNamedPipesConnectionString = "server=np:localhost";
+        public const string ServerOnlyWithNamedPipesConnectionString = "server=np:localhost;";
 
         public const string SqlAuthConnectionString = ServerOnlyConnectionString + SqlAuthFragment;
         public const string SqlAuthNamesPipesConnectionString = ServerOnlyWithNamedPipesConnectionString + SqlAuthFragment;

@@ -24,7 +24,7 @@ namespace System.Data.SqlClient.Tests
         [Fact]
         public async Task SqlAuthWithNamedPipesConnectionTest()
         {
-            using (var connection = new SqlConnection(Utilities.ServerOnlyWithNamedPipesConnectionString))
+            using (var connection = new SqlConnection(Utilities.SqlAuthNamesPipesConnectionString))
             {
                 await connection.OpenAsync();
                 await RunBasicQueryAsync(connection);

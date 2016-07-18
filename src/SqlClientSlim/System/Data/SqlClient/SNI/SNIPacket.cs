@@ -11,7 +11,7 @@ namespace System.Data.SqlClient.SNI
     /// <summary>
     /// SNI Packet
     /// </summary>
-    internal class SNIPacket : IEquatable<SNIPacket>
+    internal sealed class SNIPacket : IEquatable<SNIPacket>
     {
         private byte[] _data;
         private int _length;

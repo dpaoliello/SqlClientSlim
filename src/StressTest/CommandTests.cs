@@ -109,12 +109,13 @@ namespace StressTest
                 // Operation cancelled by user.
             }
             catch (SqlException ex) when (!connectionManager.IsConnectionAlive &&
-                (ex.Message.EndsWith("(provider: SNI_PN7, error: 0 - Unable to write data to the transport connection: A request to send or receive data was disallowed because the socket had already been shut down in that direction with a previous shutdown call.)") ||
-                ex.Message.EndsWith("(provider: SNI_PN7, error: 0 - Unable to write data to the transport connection: An established connection was aborted by the software in your host machine.)") ||
-                ex.Message.EndsWith("(provider: SNI_PN7, error: 0 - Unable to read data from the transport connection: A request to send or receive data was disallowed because the socket had already been shut down in that direction with a previous shutdown call.)") ||
-                ex.Message.EndsWith("(provider: SNI_PN7, error: 0 - Unable to read data from the transport connection: An established connection was aborted by the software in your host machine.)") ||
-                ex.Message.EndsWith("(provider: SNI_PN7, error: 0 - Connection was terminated)") ||
+                (ex.Message.EndsWith("(provider: TCP Provider, error: 0 - Unable to write data to the transport connection: A request to send or receive data was disallowed because the socket had already been shut down in that direction with a previous shutdown call.)", StringComparison.Ordinal) ||
+                ex.Message.EndsWith("(provider: TCP Provider, error: 0 - Unable to write data to the transport connection: An established connection was aborted by the software in your host machine.)", StringComparison.Ordinal) ||
+                ex.Message.EndsWith("(provider: TCP Provider, error: 0 - Unable to read data from the transport connection: A request to send or receive data was disallowed because the socket had already been shut down in that direction with a previous shutdown call.)", StringComparison.Ordinal) ||
+                ex.Message.EndsWith("(provider: TCP Provider, error: 0 - Unable to read data from the transport connection: An established connection was aborted by the software in your host machine.)", StringComparison.Ordinal) ||
+                ex.Message.EndsWith("(provider: TCP Provider, error: 0 - Connection was terminated)", StringComparison.Ordinal) ||
                 (ex.Message == "The connection is broken and recovery is not possible.  The connection is marked by the client driver as unrecoverable.  No attempt was made to restore the connection") ||
+                ex.Message.EndsWith("(provider: Named Pipes Provider, error: 0 - Cannot access a closed pipe.)", StringComparison.Ordinal) ||
                 ((connectionManager.IsMarsEnabled) && (ex.Message == "The connection is broken and recovery is not possible.  The connection is marked by the client driver as unrecoverable.  No attempt was made to restore the connection."))))
             {
                 // Connection was killed

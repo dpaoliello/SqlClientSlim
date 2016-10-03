@@ -3228,9 +3228,9 @@ namespace System.Data.SqlClient
 
             if (tdsType == TdsEnums.SQLUDT)
             {
-                _state = TdsParserState.Broken;
-                _connHandler.BreakConnection();
-                throw SQL.UnsupportedFeatureAndToken(_connHandler, SqlDbType.Udt.ToString());
+                if (!TryProcessUDTMetaData((SqlMetaDataPriv) rec, stateObj)) {
+                    return false;
+                }
             }
 
             if (rec.type == SqlDbType.Xml)
@@ -3682,17 +3682,20 @@ namespace System.Data.SqlClient
             {
                 if (TdsEnums.SQLUDT == tdsType)
                 {
-                    throw SQL.UnsupportedFeatureAndToken(_connHandler, SqlDbType.Udt.ToString());
+                    if (!TryProcessUDTMetaData((SqlMetaDataPriv)col, stateObj))
+                    {
+                        return false;
+                    }
                 }
 
                 if (col.length == TdsEnums.SQL_USHORTVARMAXLEN)
                 {
                     Debug.Assert(tdsType == TdsEnums.SQLXMLTYPE ||
-                                 tdsType == TdsEnums.SQLBIGVARCHAR ||
-                                 tdsType == TdsEnums.SQLBIGVARBINARY ||
-                                 tdsType == TdsEnums.SQLNVARCHAR ||
-                                 tdsType == TdsEnums.SQLUDT,
-                                 "Invalid streaming datatype");
+                                    tdsType == TdsEnums.SQLBIGVARCHAR ||
+                                    tdsType == TdsEnums.SQLBIGVARBINARY ||
+                                    tdsType == TdsEnums.SQLNVARCHAR ||
+                                    tdsType == TdsEnums.SQLUDT,
+                                    "Invalid streaming datatype");
                     col.metaType = MetaType.GetMaxMetaTypeFromMetaType(col.metaType);
                     Debug.Assert(col.metaType.IsLong, "Max datatype not IsLong");
                     col.length = Int32.MaxValue;
@@ -4425,7 +4428,6 @@ namespace System.Data.SqlClient
                     break;
 
                 case TdsEnums.SQLUDT:
-                    throw SQL.UnsupportedFeatureAndToken(_connHandler, SqlDbType.Udt.ToString());
                 case TdsEnums.SQLBINARY:
                 case TdsEnums.SQLBIGBINARY:
                 case TdsEnums.SQLBIGVARBINARY:
@@ -5957,7 +5959,7 @@ namespace System.Data.SqlClient
         {
             _physicalStateObj.SetTimeoutSeconds(rec.timeout);
 
-            Debug.Assert(recoverySessionData == null || (requestedFeatures & TdsEnums.FeatureExtension.SessionRecovery) != 0, "Recovery session data without session recovery feature request");
+            Debug.Assert(recoverySessionData == null || (requestedFeatures | TdsEnums.FeatureExtension.SessionRecovery) != 0, "Recovery session data without session recovery feature request");
             Debug.Assert(TdsEnums.MAXLEN_HOSTNAME >= rec.hostName.Length, "_workstationId.Length exceeds the max length for this value");
 
             Debug.Assert(rec.userName == null || (rec.userName != null && TdsEnums.MAXLEN_USERNAME >= rec.userName.Length), "_userID.Length exceeds the max length for this value");
@@ -6445,6 +6447,8 @@ namespace System.Data.SqlClient
 
                 WriteShort((short)request, stateObj); // write TransactionManager Request type
 
+                bool returnReader = false;
+
                 switch (request)
                 {
                     case TdsEnums.TransactionManagerRequestType.Begin:
@@ -6512,10 +6516,28 @@ namespace System.Data.SqlClient
                 stateObj._pendingData = true;
                 stateObj._messageStatus = 0;
 
+                SqlDataReader dtcReader = null;
                 stateObj.SniContext = SniContext.Snix_Read;
-                Run(RunBehavior.UntilDone, null, null, null, stateObj);
+                if (returnReader)
+                {
+                    dtcReader = new SqlDataReader(null, CommandBehavior.Default);
+                    Debug.Assert(this == stateObj.Parser, "different parser");
+#if DEBUG
+                    // Remove the current owner of stateObj - otherwise we will hit asserts
+                    stateObj.Owner = null;
+#endif
+                    dtcReader.Bind(stateObj);
 
-                return null;
+                    // force consumption of metadata
+                    _SqlMetaDataSet metaData = dtcReader.MetaData;
+                }
+                else
+                {
+                    Run(RunBehavior.UntilDone, null, null, null, stateObj);
+                }
+
+
+                return dtcReader;
             }
             catch (Exception e)
             {
@@ -9385,5 +9407,57 @@ namespace System.Data.SqlClient
 
             return stateObj._longlen;
         }
+
+         private bool TryProcessUDTMetaData(SqlMetaDataPriv metaData, TdsParserStateObject stateObj) {
+
+            ushort shortLength;
+            byte byteLength;
+
+            if (!stateObj.TryReadUInt16(out shortLength)) { // max byte size
+                return false;
+            }
+            metaData.length = shortLength;
+
+            // database name
+            if (!stateObj.TryReadByte(out byteLength)) {
+                return false;
+            }
+            if (byteLength != 0) {
+                if (!stateObj.TryReadString(byteLength, out metaData.udtDatabaseName)) {
+                    return false;
+                }
+            }
+
+            // schema name
+            if (!stateObj.TryReadByte(out byteLength)) {
+                return false;
+            }
+            if (byteLength != 0) {
+                if (!stateObj.TryReadString(byteLength, out metaData.udtSchemaName)) {
+                    return false;
+                }
+            }
+
+            // type name
+            if (!stateObj.TryReadByte(out byteLength)) {
+                return false;
+            }
+            if (byteLength != 0) {
+                if (!stateObj.TryReadString(byteLength, out metaData.udtTypeName)) {
+                    return false;
+                }
+            }
+
+            if (!stateObj.TryReadUInt16(out shortLength)) {
+                return false;
+            }
+            if (shortLength != 0) {
+                if (!stateObj.TryReadString(shortLength, out metaData.udtAssemblyQualifiedName)) {
+                    return false;
+                }
+            }
+
+            return true;
+        }       
     }    // tdsparser
 }//namespace

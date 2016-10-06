@@ -4456,7 +4456,7 @@ namespace System.Data.SqlClient
                         }
                     }
 
-                    value.SqlBinary = new SqlBinary(b, true);   // doesn't copy the byte array
+                    value.SqlBinary = SqlTypeWorkarounds.SqlBinaryCtor(b, true);
 
                     break;
 
@@ -4734,7 +4734,7 @@ namespace System.Data.SqlClient
                         {
                             return false;
                         }
-                        value.SqlGuid = new SqlGuid(b, true);   // doesn't copy the byte array
+                        value.SqlGuid = SqlTypeWorkarounds.SqlGuidCtor(b, true);
                         break;
                     }
 
@@ -4751,7 +4751,7 @@ namespace System.Data.SqlClient
                         {
                             return false;
                         }
-                        value.SqlBinary = new SqlBinary(b, true);   // doesn't copy the byte array
+                        value.SqlBinary = SqlTypeWorkarounds.SqlBinaryCtor(b, true);
 
                         break;
                     }
@@ -5489,10 +5489,12 @@ namespace System.Data.SqlClient
             else
                 stateObj.WriteByte(0);
 
-            WriteUnsignedInt(d.m_data1, stateObj);
-            WriteUnsignedInt(d.m_data2, stateObj);
-            WriteUnsignedInt(d.m_data3, stateObj);
-            WriteUnsignedInt(d.m_data4, stateObj);
+            uint data1, data2, data3, data4;
+            SqlTypeWorkarounds.SqlDecimalExtractData(d, out data1, out data2, out data3, out data4);
+            WriteUnsignedInt(data1, stateObj);
+            WriteUnsignedInt(data2, stateObj);
+            WriteUnsignedInt(data3, stateObj);
+            WriteUnsignedInt(data4, stateObj);
         }
 
         private void WriteDecimal(decimal value, TdsParserStateObject stateObj)
@@ -5959,7 +5961,7 @@ namespace System.Data.SqlClient
         {
             _physicalStateObj.SetTimeoutSeconds(rec.timeout);
 
-            Debug.Assert(recoverySessionData == null || (requestedFeatures | TdsEnums.FeatureExtension.SessionRecovery) != 0, "Recovery session data without session recovery feature request");
+            Debug.Assert(recoverySessionData == null || (requestedFeatures & TdsEnums.FeatureExtension.SessionRecovery) != 0, "Recovery session data without session recovery feature request");
             Debug.Assert(TdsEnums.MAXLEN_HOSTNAME >= rec.hostName.Length, "_workstationId.Length exceeds the max length for this value");
 
             Debug.Assert(rec.userName == null || (rec.userName != null && TdsEnums.MAXLEN_USERNAME >= rec.userName.Length), "_userID.Length exceeds the max length for this value");
@@ -6447,8 +6449,6 @@ namespace System.Data.SqlClient
 
                 WriteShort((short)request, stateObj); // write TransactionManager Request type
 
-                bool returnReader = false;
-
                 switch (request)
                 {
                     case TdsEnums.TransactionManagerRequestType.Begin:
@@ -6516,28 +6516,10 @@ namespace System.Data.SqlClient
                 stateObj._pendingData = true;
                 stateObj._messageStatus = 0;
 
-                SqlDataReader dtcReader = null;
                 stateObj.SniContext = SniContext.Snix_Read;
-                if (returnReader)
-                {
-                    dtcReader = new SqlDataReader(null, CommandBehavior.Default);
-                    Debug.Assert(this == stateObj.Parser, "different parser");
-#if DEBUG
-                    // Remove the current owner of stateObj - otherwise we will hit asserts
-                    stateObj.Owner = null;
-#endif
-                    dtcReader.Bind(stateObj);
+                Run(RunBehavior.UntilDone, null, null, null, stateObj);
 
-                    // force consumption of metadata
-                    _SqlMetaDataSet metaData = dtcReader.MetaData;
-                }
-                else
-                {
-                    Run(RunBehavior.UntilDone, null, null, null, stateObj);
-                }
-
-
-                return dtcReader;
+                return null;
             }
             catch (Exception e)
             {

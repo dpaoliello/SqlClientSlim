@@ -63,10 +63,6 @@ namespace System.Data.SqlClient.SNI
                     _tcpStream.Dispose();
                     _tcpStream = null;
                 }
-
-                //Release any references held by _stream.
-                _stream = null;
-
             }
         }
 

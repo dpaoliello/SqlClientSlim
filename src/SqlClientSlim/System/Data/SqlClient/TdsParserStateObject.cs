@@ -260,7 +260,7 @@ namespace System.Data.SqlClient
             SetPacketSize(_parser._physicalStateObj._outBuff.Length);
 
             SNIError sniError;
-            _sessionHandle = SNIProxy.Singleton.CreateMarsHandle(this, physicalConnection, _outBuff.Length, out sniError);
+            _sessionHandle = physicalConnection.CreateSession(this, out sniError);
 
             if (sniError != null)
             {
@@ -728,7 +728,7 @@ namespace System.Data.SqlClient
 
         internal void CreateConnectionHandle(string serverName, bool ignoreSniOpenTimeout, long timerExpire, out byte[] instanceName, bool flushCache, bool parallel, out SNIError sniError)
         {
-            _sessionHandle = SNIProxy.Singleton.CreateConnectionHandle(this, serverName, ignoreSniOpenTimeout, timerExpire, out instanceName, flushCache, parallel, out sniError);
+            _sessionHandle = SNIProxy.CreateConnectionHandle(this, serverName, ignoreSniOpenTimeout, timerExpire, out instanceName, flushCache, parallel, out sniError);
 
             if (sniError == null)
             {
@@ -2061,7 +2061,7 @@ namespace System.Data.SqlClient
                     throw ADP.ClosedConnectionError();
                 }
 
-                error = SNIProxy.Singleton.ReadSyncOverAsync(handle, ref readPacket, GetTimeoutRemaining());
+                error = handle.Receive(ref readPacket, GetTimeoutRemaining());
 
                 Interlocked.Decrement(ref _readingCount);
                 shouldDecrement = false;
@@ -2297,7 +2297,7 @@ namespace System.Data.SqlClient
                     {
                         IncrementPendingCallbacks();
 
-                        completedSync = SNIProxy.Singleton.ReadAsync(handle, ref readPacket, out sniError);
+                        completedSync = handle.ReceiveAsync(/*forceCallback*/false, ref readPacket, out sniError);
 
                         if (completedSync && (sniError != null))
                         {
@@ -2486,7 +2486,7 @@ namespace System.Data.SqlClient
                                 {
                                     IncrementPendingCallbacks();
                                 }
-                                sniError = SNIProxy.Singleton.ReadSyncOverAsync(handle, ref syncReadPacket, stateObj.GetTimeoutRemaining());
+                                sniError = handle.Receive(ref syncReadPacket, stateObj.GetTimeoutRemaining());
 
                                 Interlocked.Decrement(ref _readingCount);
                                 shouldDecrement = false;
@@ -2561,42 +2561,35 @@ namespace System.Data.SqlClient
             }
             else
             {
-                UInt32 dataSize = 0;
-                UInt32 getDataError = SNIProxy.Singleton.PacketGetData(packet, _inBuff, ref dataSize);
+                int dataSize = 0;
+                packet.GetData(_inBuff, ref dataSize);
 
-                if (getDataError == TdsEnums.SNI_SUCCESS)
+                if (_inBuff.Length < dataSize)
                 {
-                    if (_inBuff.Length < dataSize)
-                    {
-                        Debug.Assert(true, "Unexpected dataSize on Read");
-                        throw SQL.InvalidInternalPacketSize(Res.GetString(Res.SqlMisc_InvalidArraySizeMessage));
-                    }
+                    Debug.Assert(true, "Unexpected dataSize on Read");
+                    throw SQL.InvalidInternalPacketSize(Res.GetString(Res.SqlMisc_InvalidArraySizeMessage));
+                }
 
-                    _lastSuccessfulIOTimer._value = DateTime.UtcNow.Ticks;
-                    _inBytesRead = (int)dataSize;
-                    _inBytesUsed = 0;
+                _lastSuccessfulIOTimer._value = DateTime.UtcNow.Ticks;
+                _inBytesRead = (int)dataSize;
+                _inBytesUsed = 0;
 
-                    if (_snapshot != null)
+                if (_snapshot != null)
+                {
+                    _snapshot.PushBuffer(_inBuff, _inBytesRead);
+                    if (_snapshotReplay)
                     {
-                        _snapshot.PushBuffer(_inBuff, _inBytesRead);
-                        if (_snapshotReplay)
-                        {
-                            _snapshot.Replay();
+                        _snapshot.Replay();
 #if DEBUG
-                            _snapshot.AssertCurrent();
+                        _snapshot.AssertCurrent();
 #endif
-                        }
                     }
-
-                    SniReadStatisticsAndTracing();
-
-
-                    AssertValidState();
                 }
-                else
-                {
-                    throw SQL.ParsingError();
-                }
+
+                SniReadStatisticsAndTracing();
+
+
+                AssertValidState();
             }
         }
 
@@ -2629,7 +2622,7 @@ namespace System.Data.SqlClient
 
             // The mars physical connection can get a callback
             // with a packet but no result after the connection is closed.
-            if (source == null && _parser._pMarsPhysicalConObj == this)
+            if (source == null && _parser.MARSOn && _parser._physicalStateObj == this)
             {
                 return;
             }
@@ -3112,7 +3105,7 @@ namespace System.Data.SqlClient
             }
             finally
             {
-                completedSync = SNIProxy.Singleton.WritePacket(handle, packet, sync, out sniError);
+                completedSync = SNIProxy.WritePacket(handle, packet, sync, out sniError);
             }
             if (!completedSync)
             {
@@ -3212,11 +3205,7 @@ namespace System.Data.SqlClient
                 SNIPacket attnPacket = new SNIPacket(Handle);
                 _sniAsyncAttnPacket = attnPacket;
 
-#if MANAGED_SNI
-                SNIProxy.Singleton.PacketSetData(attnPacket, SQL.AttentionHeader, TdsEnums.HEADER_LEN);
-#else
-                SNINativeMethodWrapper.SNIPacketSetData(attnPacket, SQL.AttentionHeader, TdsEnums.HEADER_LEN);
-#endif // MANAGED_SNI
+                attnPacket.SetData(SQL.AttentionHeader, TdsEnums.HEADER_LEN);
                 try
                 {
                     // Dev11 #344723: SqlClient stress hang System_Data!Tcp::ReadSync via a call to SqlDataReader::Close
@@ -3276,11 +3265,7 @@ namespace System.Data.SqlClient
         {
             // Prepare packet, and write to packet.
             SNIPacket packet = GetResetWritePacket();
-#if MANAGED_SNI
-            SNIProxy.Singleton.PacketSetData(packet, _outBuff, _outBytesUsed);
-#else
-            SNINativeMethodWrapper.SNIPacketSetData(packet, _outBuff, _outBytesUsed);
-#endif // MANAGED_SNI
+            packet.SetData(_outBuff, _outBytesUsed);
 
             Debug.Assert(Parser.Connection._parserLock.ThreadMayHaveLock(), "Thread is writing without taking the connection lock");
             Task task = SNIWritePacket(Handle, packet, canAccumulate, callerHasConnectionLock: true);
@@ -3576,6 +3561,23 @@ namespace System.Data.SqlClient
             {
                 ThrowExceptionAndWarning();
             }
+        }
+
+        /// <summary>
+        /// Enables MARS for this physical connection.
+        /// </summary>
+        internal void EnableMars()
+        {
+            SNIError error;
+            SNIHandle newHandle = SNIMarsConnection.EnableMars(this, out error);
+
+            if (error != null)
+            {
+                AddError(_parser.ProcessSNIError(this, error));
+                ThrowExceptionAndWarning();
+            }
+
+            _sessionHandle = newHandle;
         }
 
         /// <summary>

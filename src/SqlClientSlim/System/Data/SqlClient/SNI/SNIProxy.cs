@@ -7,26 +7,14 @@ namespace System.Data.SqlClient.SNI
     /// <summary>
     /// Managed SNI proxy implementation. Contains many SNI entry points used by SqlClient.
     /// </summary>
-    internal class SNIProxy
+    internal static class SNIProxy
     {
-        public static readonly SNIProxy Singleton = new SNIProxy();
-
-        /// <summary>
-        /// Enable MARS support on a connection
-        /// </summary>
-        /// <param name="handle">Connection handle</param>
-        /// <returns>SNI error code</returns>
-        public SNIError EnableMars(SNIHandle handle)
-        {
-            return SNIMarsManager.Singleton.CreateMarsConnection(handle);
-        }
-
         /// <summary>
         /// Enable SSL on a connection
         /// </summary>
         /// <param name="handle">Connection handle</param>
         /// <returns>SNI error code</returns>
-        public SNIError EnableSsl(SNIHandle handle, uint options)
+        public static SNIError EnableSsl(SNIHandle handle, uint options)
         {
             try
             {
@@ -39,16 +27,6 @@ namespace System.Data.SqlClient.SNI
         }
 
         /// <summary>
-        /// Disable SSL on a connection
-        /// </summary>
-        /// <param name="handle">Connection handle</param>
-        /// <returns>SNI error code</returns>
-        public void DisableSsl(SNIHandle handle)
-        {
-            handle.DisableSsl();
-        }
-
-        /// <summary>
         /// Generate SSPI context
         /// </summary>
         /// <param name="handle">SNI connection handle</param>
@@ -57,7 +35,7 @@ namespace System.Data.SqlClient.SNI
         /// <param name="sendLength">Send length</param>
         /// <param name="serverName">Service Principal Name buffer</param>
         /// <returns>SNI error code</returns>
-        public uint GenSspiClientContext(SNIHandle handle, byte[] receivedBuff, byte[] sendBuff, ref uint sendLength, byte[] serverName)
+        public static uint GenSspiClientContext(SNIHandle handle, byte[] receivedBuff, byte[] sendBuff, ref uint sendLength, byte[] serverName)
         {
             throw new PlatformNotSupportedException();
         }
@@ -67,62 +45,9 @@ namespace System.Data.SqlClient.SNI
         /// </summary>
         /// <param name="maxLength">Max length of SSPI packet</param>
         /// <returns>SNI error code</returns>
-        public uint InitializeSspiPackage(ref uint maxLength)
+        public static uint InitializeSspiPackage(ref uint maxLength)
         {
             throw new PlatformNotSupportedException();
-        }
-
-        /// <summary>
-        /// Set connection buffer size
-        /// </summary>
-        /// <param name="handle">SNI handle</param>
-        /// <param name="bufferSize">Buffer size</param>
-        /// <returns>SNI error code</returns>
-        public uint SetConnectionBufferSize(SNIHandle handle, uint bufferSize)
-        {
-            handle.SetBufferSize((int)bufferSize);
-            return TdsEnums.SNI_SUCCESS;
-        }
-
-        /// <summary>
-        /// Get packet data
-        /// </summary>
-        /// <param name="packet">SNI packet</param>
-        /// <param name="inBuff">Buffer</param>
-        /// <param name="dataSize">Data size</param>
-        /// <returns>SNI error status</returns>
-        public uint PacketGetData(SNIPacket packet, byte[] inBuff, ref uint dataSize)
-        {
-            int dataSizeInt = 0;
-            packet.GetData(inBuff, ref dataSizeInt);
-            dataSize = (uint)dataSizeInt;
-
-            return TdsEnums.SNI_SUCCESS;
-        }
-
-        /// <summary>
-        /// Read synchronously
-        /// </summary>
-        /// <param name="handle">SNI handle</param>
-        /// <param name="packet">SNI packet</param>
-        /// <param name="timeout">Timeout</param>
-        /// <returns>SNI error status</returns>
-        public SNIError ReadSyncOverAsync(SNIHandle handle, ref SNIPacket packet, int timeout)
-        {
-            return handle.Receive(ref packet, timeout);
-        }
-
-        /// <summary>
-        /// Get SNI connection ID
-        /// </summary>
-        /// <param name="handle">SNI handle</param>
-        /// <param name="clientConnectionId">Client connection ID</param>
-        /// <returns>SNI error status</returns>
-        public uint GetConnectionId(SNIHandle handle, ref Guid clientConnectionId)
-        {
-            clientConnectionId = handle.ConnectionId;
-
-            return TdsEnums.SNI_SUCCESS;
         }
 
         /// <summary>
@@ -132,7 +57,7 @@ namespace System.Data.SqlClient.SNI
         /// <param name="packet">SNI packet</param>
         /// <param name="sync">true if synchronous, false if asynchronous</param>
         /// <returns>True if completed synchronous, otherwise false</returns>
-        public bool WritePacket(SNIHandle handle, SNIPacket packet, bool sync, out SNIError sniError)
+        public static bool WritePacket(SNIHandle handle, SNIPacket packet, bool sync, out SNIError sniError)
         {
             if (sync)
             {
@@ -146,17 +71,6 @@ namespace System.Data.SqlClient.SNI
         }
 
         /// <summary>
-        /// Reset a packet
-        /// </summary>
-        /// <param name="handle">SNI handle</param>
-        /// <param name="write">true if packet is for write</param>
-        /// <param name="packet">SNI packet</param>
-        public void PacketReset(SNIHandle handle, bool write, SNIPacket packet)
-        {
-            packet.Reset();
-        }
-
-        /// <summary>
         /// Create a SNI connection handle
         /// </summary>
         /// <param name="callbackObject">Asynchronous I/O callback object</param>
@@ -167,7 +81,7 @@ namespace System.Data.SqlClient.SNI
         /// <param name="flushCache">Flush packet cache</param>
         /// <param name="parallel">Attempt parallel connects</param>
         /// <returns>SNI handle</returns>
-        public SNIHandle CreateConnectionHandle(object callbackObject, string fullServerName, bool ignoreSniOpenTimeout, long timerExpire, out byte[] instanceName, bool flushCache, bool parallel, out SNIError sniError)
+        public static SNIHandle CreateConnectionHandle(object callbackObject, string fullServerName, bool ignoreSniOpenTimeout, long timerExpire, out byte[] instanceName, bool flushCache, bool parallel, out SNIError sniError)
         {
             instanceName = new byte[1];
             instanceName[0] = 0;
@@ -227,7 +141,7 @@ namespace System.Data.SqlClient.SNI
         /// <param name="callbackObject">Asynchronous I/O callback object</param>
         /// <param name="parallel">Should MultiSubnetFailover be used</param>
         /// <returns>SNITCPHandle</returns>
-        private SNITCPHandle CreateTcpHandle(string fullServerName, long timerExpire, object callbackObject, bool parallel, out SNIError sniError)
+        private static SNITCPHandle CreateTcpHandle(string fullServerName, long timerExpire, object callbackObject, bool parallel, out SNIError sniError)
         {
             // TCP Format: 
             // tcp:<host name>\<instance name>
@@ -253,7 +167,7 @@ namespace System.Data.SqlClient.SNI
                 return null;
             }
 
-            return new SNITCPHandle(serverAndPortParts[0], portNumber, timerExpire, callbackObject, parallel, out sniError);
+            return new SNITCPHandle(serverAndPortParts[0], portNumber, timerExpire, parallel, out sniError);
         }
 
         /// <summary>
@@ -264,7 +178,7 @@ namespace System.Data.SqlClient.SNI
         /// <param name="callbackObject">Asynchronous I/O callback object</param>
         /// <param name="parallel">Should MultiSubnetFailover be used. Only returns an error for named pipes.</param>
         /// <returns>SNINpHandle</returns>
-        private SNINpHandle CreateNpHandle(string fullServerName, long timerExpire, object callbackObject, bool parallel, out SNIError sniError)
+        private static SNINpHandle CreateNpHandle(string fullServerName, long timerExpire, object callbackObject, bool parallel, out SNIError sniError)
         {
             if (parallel)
             {
@@ -307,42 +221,7 @@ namespace System.Data.SqlClient.SNI
                 }
             }
 
-            return new SNINpHandle(serverName, pipeName, timerExpire, callbackObject, out sniError);
-        }
-
-        /// <summary>
-        /// Create MARS handle
-        /// </summary>
-        /// <param name="callbackObject">Asynchronous I/O callback object</param>
-        /// <param name="physicalConnection">SNI connection handle</param>
-        /// <param name="defaultBufferSize">Default buffer size</param>
-        /// <param name="async">Asynchronous connection</param>
-        /// <returns>SNI error status</returns>
-        public SNIHandle CreateMarsHandle(TdsParserStateObject callbackObject, SNIHandle physicalConnection, int defaultBufferSize, out SNIError sniError)
-        {
-            SNIMarsConnection connection = SNIMarsManager.Singleton.GetConnection(physicalConnection);
-            return connection.CreateSession(callbackObject, out sniError);
-        }
-
-        /// <summary>
-        /// Read packet asynchronously
-        /// </summary>
-        public bool ReadAsync(SNIHandle handle, ref SNIPacket packet, out SNIError sniError)
-        {
-            packet = new SNIPacket(null);
-
-            return handle.ReceiveAsync(false, ref packet, out sniError);
-        }
-
-        /// <summary>
-        /// Set packet data
-        /// </summary>
-        /// <param name="packet">SNI packet</param>
-        /// <param name="data">Data</param>
-        /// <param name="length">Length</param>
-        public void PacketSetData(SNIPacket packet, byte[] data, int length)
-        {
-            packet.SetData(data, length);
+            return new SNINpHandle(serverName, pipeName, timerExpire, out sniError);
         }
     }
 }

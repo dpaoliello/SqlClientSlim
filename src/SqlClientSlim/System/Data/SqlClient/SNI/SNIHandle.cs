@@ -86,6 +86,11 @@ namespace System.Data.SqlClient.SNI
         /// </summary>
         public abstract void KillConnection();
 
+        /// <summary>
+        /// If this is a multiplexed connection, creates a new session.
+        /// </summary>
+        public abstract SNIHandle CreateSession(TdsParserStateObject callbackObject, out SNIError sniError);
+
         protected struct DebugLock
         {
             private const int NoThread = 0;
@@ -99,6 +104,7 @@ namespace System.Data.SqlClient.SNI
                 int previousThread = Interlocked.CompareExchange(ref _threadHoldingLock, Thread.CurrentThread.ManagedThreadId, NoThread);
                 if (previousThread != NoThread)
                 {
+                    Debugger.Break();
                     Debug.Assert(false, $"Another thread is holding the lock: {previousThread}");
                 }
                 return new Holder(handle);

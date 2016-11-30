@@ -14,6 +14,9 @@ namespace StressTest
         private static readonly CancellationTokenSource cancellationSourceWithoutPendingCancel = new CancellationTokenSource();
         private static readonly Func<CancellationToken, Task>[] s_workerActions = {
             EndToEndTests.SqlAuthConnectionTest,
+            EndToEndTests.SqlAuthConnectionTest,
+            EndToEndTests.SqlAuthConnectionTest,
+
             EndToEndTests.MarsConnectionTest
         };
 

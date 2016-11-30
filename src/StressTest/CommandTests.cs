@@ -113,10 +113,12 @@ namespace StressTest
                 ex.Message.EndsWith("(provider: TCP Provider, error: 0 - Unable to write data to the transport connection: An established connection was aborted by the software in your host machine.)", StringComparison.Ordinal) ||
                 ex.Message.EndsWith("(provider: TCP Provider, error: 0 - Unable to read data from the transport connection: A request to send or receive data was disallowed because the socket had already been shut down in that direction with a previous shutdown call.)", StringComparison.Ordinal) ||
                 ex.Message.EndsWith("(provider: TCP Provider, error: 0 - Unable to read data from the transport connection: An established connection was aborted by the software in your host machine.)", StringComparison.Ordinal) ||
-                ex.Message.EndsWith("(provider: TCP Provider, error: 0 - Connection was terminated)", StringComparison.Ordinal) ||
+                ex.Message.EndsWith("(provider: TCP Provider, error: 2 - Connection was terminated)", StringComparison.Ordinal) ||
                 (ex.Message == "The connection is broken and recovery is not possible.  The connection is marked by the client driver as unrecoverable.  No attempt was made to restore the connection") ||
                 ex.Message.EndsWith("(provider: Named Pipes Provider, error: 0 - Cannot access a closed pipe.)", StringComparison.Ordinal) ||
-                ((connectionManager.IsMarsEnabled) && (ex.Message == "The connection is broken and recovery is not possible.  The connection is marked by the client driver as unrecoverable.  No attempt was made to restore the connection."))))
+                ((connectionManager.IsMarsEnabled) &&
+                    ((ex.Message == "The connection is broken and recovery is not possible.  The connection is marked by the client driver as unrecoverable.  No attempt was made to restore the connection.") ||
+                    ex.Message.EndsWith("(provider: Named Pipes Provider, error: 0 - Pipe is broken.)", StringComparison.Ordinal)))))
             {
                 // Connection was killed
             }
@@ -131,9 +133,20 @@ namespace StressTest
             {
                 // Timeout
             }
+            catch (SqlException ex) when (connectionManager.IsMarsEnabled &&
+                ex.Message.EndsWith("(provider: Named Pipes Provider, error: 0 - Cannot access a closed pipe.)", StringComparison.Ordinal))
+            {
+                // BUG: MARS: There is a race between a one thread repairing a connection and other thread using that connection.
+            }
+            catch (InvalidOperationException ex) when (connectionManager.IsMarsEnabled &&
+                ex.Message.EndsWith("requires an open and available Connection. The connection's current state is closed.", StringComparison.Ordinal))
+            {
+                // BUG: MARS: There is a race between a one thread repairing a connection and other thread using that connection.
+            }
             catch (Exception ex)
             {
                 // Unknown error
+                Debugger.Break();
                 Debug.Assert(false, $"Unknown error during command execution: {ex.Message}");
                 throw;
             }

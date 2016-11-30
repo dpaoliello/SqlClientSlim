@@ -48,10 +48,7 @@ namespace System.Data.SqlClient
 
 
         // Default state object for parser
-        internal TdsParserStateObject _physicalStateObj = null; // Default stateObj and connection for Dbnetlib and non-MARS SNI.
-
-        // Also, default logical stateObj and connection for MARS over SNI.
-        internal TdsParserStateObject _pMarsPhysicalConObj = null; // With MARS enabled, cached physical stateObj and connection.
+        internal TdsParserStateObject _physicalStateObj = null;
 
         // Must keep this around - especially for callbacks on pre-MARS
         // ReadAsync which will return if physical connection broken!
@@ -353,13 +350,7 @@ namespace System.Data.SqlClient
             _connHandler.TimeoutErrorInternal.EndPhase(SqlConnectionTimeoutErrorPhase.InitializeConnection);
             _connHandler.TimeoutErrorInternal.SetAndBeginPhase(SqlConnectionTimeoutErrorPhase.SendPreLoginHandshake);
 
-#if MANAGED_SNI
-            UInt32 result = SNIProxy.Singleton.GetConnectionId(_physicalStateObj.Handle, ref _connHandler._clientConnectionId);
-#else
-            UInt32 result = SNINativeMethodWrapper.SniGetConnectionId(_physicalStateObj.Handle, ref _connHandler._clientConnectionId);
-#endif // MANAGED_SNI
-
-            Debug.Assert(result == TdsEnums.SNI_SUCCESS, "Unexpected failure state upon calling SniGetConnectionId");
+            _connHandler._clientConnectionId = _physicalStateObj.Handle.ConnectionId;
 
             SendPreLoginHandshake(instanceName, encrypt);
 
@@ -384,13 +375,7 @@ namespace System.Data.SqlClient
                     ThrowExceptionAndWarning(_physicalStateObj);
                 }
 
-#if MANAGED_SNI
-                UInt32 retCode = SNIProxy.Singleton.GetConnectionId(_physicalStateObj.Handle, ref _connHandler._clientConnectionId);
-#else
-                UInt32 retCode = SNINativeMethodWrapper.SniGetConnectionId(_physicalStateObj.Handle, ref _connHandler._clientConnectionId);
-#endif // MANAGED_SNI
-
-                Debug.Assert(retCode == TdsEnums.SNI_SUCCESS, "Unexpected failure state upon calling SniGetConnectionId");
+                _connHandler._clientConnectionId = _physicalStateObj.Handle.ConnectionId;
 
                 SendPreLoginHandshake(instanceName, encrypt);
                 status = ConsumePreLoginHandshake(encrypt, trustServerCert, integratedSecurity, out marsCapable);
@@ -419,7 +404,7 @@ namespace System.Data.SqlClient
         {
             Debug.Assert(_encryptionOption == EncryptionOptions.LOGIN, "Invalid encryption option state");
 
-            SNIProxy.Singleton.DisableSsl(_physicalStateObj.Handle);
+            _physicalStateObj.Handle.DisableSsl();
 
             // create a new packet encryption changes the internal packet size
             try { }   // EmptyTry/Finally to avoid FXCop violation
@@ -433,26 +418,14 @@ namespace System.Data.SqlClient
         {
             if (_fMARS)
             {
-                // Cache physical stateObj and connection.
-                _pMarsPhysicalConObj = _physicalStateObj;
-
-                _pMarsPhysicalConObj.IncrementPendingCallbacks();
-                SNIError error = SNIProxy.Singleton.EnableMars(_pMarsPhysicalConObj.Handle);
-
-                if (error != null)
-                {
-                    _physicalStateObj.AddError(ProcessSNIError(_physicalStateObj, error));
-                    ThrowExceptionAndWarning(_physicalStateObj);
-                }
-
-                _physicalStateObj = CreateSession(); // Create and open default MARS stateObj and connection.
+                _physicalStateObj.EnableMars();
             }
         }
 
         internal TdsParserStateObject CreateSession()
         {
-            TdsParserStateObject session = new TdsParserStateObject(this, (SNIHandle)_pMarsPhysicalConObj.Handle);
-            return session;
+            Debug.Assert(_fMARS, "MARS must be enabled to create new sessions");
+            return new TdsParserStateObject(this, _physicalStateObj.Handle);
         }
 
         internal TdsParserStateObject GetSession(object owner)
@@ -781,7 +754,7 @@ namespace System.Data.SqlClient
                             UInt32 info = ((encrypt && !trustServerCert) ? TdsEnums.SNI_SSL_VALIDATE_CERTIFICATE : 0)
                                 | (isYukonOrLater ? TdsEnums.SNI_SSL_USE_SCHANNEL_CACHE : 0);
 
-                            SNIError error = SNIProxy.Singleton.EnableSsl(_physicalStateObj.Handle, info);
+                            SNIError error = SNIProxy.EnableSsl(_physicalStateObj.Handle, info);
 
                             if (error != null)
                             {
@@ -918,31 +891,18 @@ namespace System.Data.SqlClient
 
                 _state = TdsParserState.Closed;
 
-                try
+                // If the _physicalStateObj has an owner, we will delay the disposal until the owner is finished with it
+                if (!_physicalStateObj.HasOwner)
                 {
-                    // If the _physicalStateObj has an owner, we will delay the disposal until the owner is finished with it
-                    if (!_physicalStateObj.HasOwner)
-                    {
-                        _physicalStateObj.SniContext = SniContext.Snix_Close;
+                    _physicalStateObj.SniContext = SniContext.Snix_Close;
 #if DEBUG
-                        _physicalStateObj.InvalidateDebugOnlyCopyOfSniContext();
+                    _physicalStateObj.InvalidateDebugOnlyCopyOfSniContext();
 #endif
-                        _physicalStateObj.Dispose();
-                    }
-                    else
-                    {
-                        _physicalStateObj.DecrementPendingCallbacks();
-                    }
-
-                    // Not allocated until MARS is actually enabled in SNI.
-                    if (null != _pMarsPhysicalConObj)
-                    {
-                        _pMarsPhysicalConObj.Dispose();
-                    }
+                    _physicalStateObj.Dispose();
                 }
-                finally
+                else
                 {
-                    _pMarsPhysicalConObj = null;
+                    _physicalStateObj.DecrementPendingCallbacks();
                 }
             }
         }
@@ -2160,14 +2120,7 @@ namespace System.Data.SqlClient
                             _physicalStateObj.ClearAllWritePackets();
 
                             // Update SNI ConsumerInfo value to be resulting packet size
-                            UInt32 unsignedPacketSize = (UInt32)packetSize;
-#if MANAGED_SNI
-                            UInt32 result = SNIProxy.Singleton.SetConnectionBufferSize(_physicalStateObj.Handle, unsignedPacketSize);
-#else
-                            UInt32 result = SNINativeMethodWrapper.SNISetInfo(_physicalStateObj.Handle, SNINativeMethodWrapper.QTypes.SNI_QUERY_CONN_BUFSIZE, ref unsignedPacketSize);
-#endif // MANAGED_SNI
-
-                            Debug.Assert(result == TdsEnums.SNI_SUCCESS, "Unexpected failure state upon calling SNISetInfo");
+                            _physicalStateObj.Handle.SetBufferSize(packetSize);
                         }
 
                         break;
@@ -6133,7 +6086,7 @@ namespace System.Data.SqlClient
 #endif
 
             // we need to respond to the server's message with SSPI data
-            if (0 != SNIProxy.Singleton.GenSspiClientContext(_physicalStateObj.Handle, receivedBuff, sendBuff, ref sendLength, sniSpnBuffer)) 
+            if (0 != SNIProxy.GenSspiClientContext(_physicalStateObj.Handle, receivedBuff, sendBuff, ref sendLength, sniSpnBuffer)) 
             {
                 SSPIError(SQLMessage.SSPIGenerateError(), TdsEnums.GEN_CLIENT_CONTEXT);
             }
@@ -6191,7 +6144,7 @@ namespace System.Data.SqlClient
                         // use local for ref param to defer setting s_maxSSPILength until we know the call succeeded.
                         UInt32 maxLength = 0;
 #if MANAGED_SNI
-                        if (0 != SNIProxy.Singleton.InitializeSspiPackage(ref maxLength))
+                        if (0 != SNIProxy.InitializeSspiPackage(ref maxLength))
 #else
                         if (0 != SNINativeMethodWrapper.SNISecInitPackage(ref maxLength))
 #endif // MANAGED_SNI

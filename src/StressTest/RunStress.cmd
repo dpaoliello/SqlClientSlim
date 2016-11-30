@@ -1,1 +1,0 @@
-windbg "C:\Program Files\dotnet\shared\Microsoft.NETCore.App\1.0.0\corehost.exe" bin\Debug\netcoreapp1.0\StressTest.dll

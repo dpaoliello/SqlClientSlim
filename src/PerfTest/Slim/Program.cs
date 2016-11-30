@@ -13,6 +13,7 @@ namespace PerfTest
             RunTest(perfEngine, SqlClientTests.SelectParametersTest, "SelectParametersTest", TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(15));
             RunTest(perfEngine, SqlClientTests.LargeStreamTcpTest, "LargeStreamTcpTest", TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(15));
             RunTest(perfEngine, SqlClientTests.LargeStreamNpTest, "LargeStreamNpTest", TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(15));
+            RunTest(perfEngine, SqlClientTests.LargeStreamTcpMarsTest, "LargeStreamTcpMarsTest", TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(15));
         }
 
         private static void RunTest(Engine perfEngine, Action test, string testName, TimeSpan warmupTime, TimeSpan runningTime)

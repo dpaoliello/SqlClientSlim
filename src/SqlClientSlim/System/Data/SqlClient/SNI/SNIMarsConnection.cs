@@ -39,7 +39,7 @@ namespace System.Data.SqlClient.SNI
         /// Constructor
         /// </summary>
         /// <param name="lowerHandle">Lower handle</param>
-        public SNIMarsConnection(SNIHandle lowerHandle)
+        private SNIMarsConnection(SNIHandle lowerHandle)
         {
             _lowerHandle = lowerHandle;
             _lowerHandle.SetAsyncCallbacks(HandleReceiveComplete, HandleSendComplete);
@@ -54,6 +54,17 @@ namespace System.Data.SqlClient.SNI
                 _sessions.Add(sessionId, handle);
                 return handle;
             }
+        }
+
+        /// <summary>
+        /// Enables MARS for a TdsParserStateObject and returns its new handle.
+        /// </summary>
+        public static SNIMarsHandle EnableMars(TdsParserStateObject stateObject, out SNIError sniError)
+        {
+            Debug.Assert(!(stateObject.Handle is SNIMarsHandle), "Cannot enable MARS on a SNIMarsHandle");
+            SNIMarsConnection marsConnection = new SNIMarsConnection(stateObject.Handle);
+            marsConnection.StartReceive();
+            return marsConnection.CreateSession(stateObject, out sniError);
         }
 
         /// <summary>
@@ -130,6 +141,7 @@ namespace System.Data.SqlClient.SNI
             {
                 handle.HandleReceiveError(new SNIPacket(handle), sniError);
             }
+            _lowerHandle.Dispose();
         }
 
         /// <summary>
@@ -148,7 +160,6 @@ namespace System.Data.SqlClient.SNI
             SNISMUXHeader currentHeader = null;
             SNIPacket currentPacket = null;
             SNIMarsHandle currentSession = null;
-
 
             if (sniError != null)
             {
@@ -222,14 +233,13 @@ namespace System.Data.SqlClient.SNI
                     {
                         sniError = new SNIError(SNIProviders.TCP_PROV, 0, 0, "Packet for unknown MARS session received");
                         HandleReceiveError(sniError);
-                        _lowerHandle.Dispose();
-                        _lowerHandle = null;
                         return;
                     }
 
                     if (_currentHeader.flags == (byte)SNISMUXFlags.SMUX_FIN)
                     {
-                        _sessions.Remove(_currentHeader.sessionId);
+                        RemoveSession(_currentHeader.sessionId);
+                        sessionRemoved = true;
                     }
                     else
                     {
@@ -282,6 +292,22 @@ namespace System.Data.SqlClient.SNI
         public void KillConnection()
         {
             _lowerHandle.KillConnection();
+        }
+
+        /// <summary>
+        /// Removes a session from the set of sessions.
+        /// </summary>
+        private void RemoveSession(ushort sessionId)
+        {
+            Debug.Assert(Monitor.IsEntered(this), "Must have lock before calling this method");
+
+            bool wasRemoved = _sessions.Remove(_currentHeader.sessionId);
+            Debug.Assert(wasRemoved, "Attempted to remove a session that doesn't exist");
+
+            if (_sessions.Count == 0)
+            {
+                _lowerHandle.Dispose();
+            }
         }
     }
 }

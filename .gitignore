@@ -11,6 +11,7 @@ tools/
 # Visual Studio temp files
 .vs/
 project.lock.json
+*.tmp
 
 # General temp files
 *.log

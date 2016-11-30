@@ -18,8 +18,8 @@ namespace System.Data.SqlClient.SNI
 
         protected override Stream OriginalStream => _pipeStream;
 
-        public SNINpHandle(string serverName, string pipeName, long timerExpire, object callbackObject, out SNIError error)
-            : base(serverName, callbackObject)
+        public SNINpHandle(string serverName, string pipeName, long timerExpire, out SNIError error)
+            : base(serverName)
         {
             try
             {

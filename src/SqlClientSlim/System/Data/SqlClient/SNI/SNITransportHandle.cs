@@ -12,7 +12,6 @@ namespace System.Data.SqlClient.SNI
     internal abstract class SNITransportHandle : SNIHandle
     {
         protected readonly string _targetServer;
-        protected readonly object _callbackObject;
 
         protected Stream _stream;
         protected SslStream _sslStream;
@@ -25,9 +24,8 @@ namespace System.Data.SqlClient.SNI
         protected int _bufferSize = TdsEnums.DEFAULT_LOGIN_PACKET_SIZE;
         protected Guid _connectionId = Guid.NewGuid();
 
-        protected SNITransportHandle(string targetServer, object callbackObject)
+        protected SNITransportHandle(string targetServer)
         {
-            _callbackObject = callbackObject;
             _targetServer = targetServer;
         }
 
@@ -212,11 +210,11 @@ namespace System.Data.SqlClient.SNI
         /// <returns>SNI error code</returns>
         public sealed override bool ReceiveAsync(bool forceCallback, ref SNIPacket packet, out SNIError sniError)
         {
+            packet = new SNIPacket(null);
+            packet.Allocate(_bufferSize);
+
             using (_debugLock.Acquire(this))
             {
-                packet = new SNIPacket(null);
-                packet.Allocate(_bufferSize);
-
                 try
                 {
                     packet.ReadFromStreamAsync(_stream, _receiveCallback);
@@ -410,6 +408,13 @@ namespace System.Data.SqlClient.SNI
             }
 
             return SNICommon.ValidateSslServerCertificate(_targetServer, sender, cert, chain, policyErrors);
+        }
+
+        public override SNIHandle CreateSession(TdsParserStateObject callbackObject, out SNIError sniError)
+        {
+            Debug.Assert(false, "Not a MARS connection");
+            sniError = null;
+            return null;
         }
     }
 }

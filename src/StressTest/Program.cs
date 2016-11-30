@@ -12,7 +12,7 @@ namespace StressTest
             Trace.Listeners.Add(new DebugTraceListener());
 
             // TODO: Dynamic number of threads
-            const int threadCount = 32;
+            const int threadCount = 8;
 
             // Pressing enter will stop the engine
             Console.WriteLine("Press [Enter] to cancel");

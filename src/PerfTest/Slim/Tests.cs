@@ -8,6 +8,7 @@ namespace PerfTest
         private const string SqlAuthFragment = "user id=sa;password=452g34f23t4324t2g43t;";
         private const string SqlAuthTcpConnectionString = "server=tcp:localhost;" + SqlAuthFragment;
         private const string SqlAuthNpConnectionString = "server=np:localhost;" + SqlAuthFragment;
+        private const string SqlAuthTcpMarsConnectionString = SqlAuthTcpConnectionString + "MultipleActiveResultSets=true;";
 
         /// <summary>
         /// Opening and closing a connection from the connection pool
@@ -68,6 +69,11 @@ namespace PerfTest
         /// Streaming a large amount of data from the server using Named Pipes
         /// </summary>
         public static void LargeStreamNpTest() => LargeStreamTest(SqlAuthNpConnectionString);
+
+        /// <summary>
+        /// Streaming a large amount of data from the server using TCP & MARS
+        /// </summary>
+        public static void LargeStreamTcpMarsTest() => LargeStreamTest(SqlAuthTcpMarsConnectionString);
 
         /// <summary>
         /// Streaming a large amount of data from the server

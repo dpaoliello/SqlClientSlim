@@ -8,6 +8,10 @@ namespace System.Data.SqlClient.Tests
     {
         private const string SqlAuthFragment = "user id=sa;password=452g34f23t4324t2g43t;";
 
+        public const string MarsFragment = "MultipleActiveResultSets=true;";
+        public const string MaxPoolOf1Fragment = "Max Pool Size=1;";
+        public const string NonPooledFragment = "Pooling=false;";
+
         public const string ServerOnlyConnectionString = "server=localhost;";
         public const string ServerOnlyWithNamedPipesConnectionString = "server=np:localhost;";
 

@@ -33,8 +33,8 @@ namespace System.Data.SqlClient.SNI
         /// <param name="port">TCP port number</param>
         /// <param name="timerExpire">Connection timer expiration</param>
         /// <param name="callbackObject">Callback object</param>
-        public SNITCPHandle(string serverName, int port, long timerExpire, object callbackObject, bool parallel, out SNIError sniError)
-            : base(serverName, callbackObject)
+        public SNITCPHandle(string serverName, int port, long timerExpire, bool parallel, out SNIError sniError)
+            : base(serverName)
         {
             try
             {

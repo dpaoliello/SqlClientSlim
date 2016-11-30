@@ -266,6 +266,8 @@ namespace System.Data.SqlClient.SNI
         /// <returns>True if completed synchronously, otherwise false</returns>
         public override bool ReceiveAsync(bool forceCallback, ref SNIPacket packet, out SNIError sniError)
         {
+            Debug.Assert(!forceCallback, "SNIMarsHandles should never be forced to use a callback");
+
             lock (_receivedPacketQueue)
             {
                 int queueCount = _receivedPacketQueue.Count;
@@ -330,12 +332,9 @@ namespace System.Data.SqlClient.SNI
         /// </summary>
         public void HandleSendComplete(SNIPacket packet, SNIError sniError)
         {
-            lock (this)
-            {
-                Debug.Assert(_callbackObject != null);
+            Debug.Assert(_callbackObject != null);
 
-                _callbackObject.WriteAsyncCallback(packet, sniError);
-            }
+            _callbackObject.WriteAsyncCallback(packet, sniError);
         }
 
         /// <summary>
@@ -381,11 +380,11 @@ namespace System.Data.SqlClient.SNI
                         }
 
                         _asyncReceives--;
-
-                        _callbackObject.ReadAsyncCallback(packet, null);
                     }
                 }
             }
+
+            _callbackObject.ReadAsyncCallback(packet, null);
 
             lock (this)
             {
@@ -486,6 +485,7 @@ namespace System.Data.SqlClient.SNI
         /// <param name="sendCallback">Send callback</param>
         public override void SetAsyncCallbacks(SNIAsyncCallback receiveCallback, SNIAsyncCallback sendCallback)
         {
+            Debug.Assert(false, "Should never be called for a SNIMarsHandle");
         }
 
         /// <summary>
@@ -518,6 +518,14 @@ namespace System.Data.SqlClient.SNI
         public override void KillConnection()
         {
             _connection.KillConnection();
+        }
+
+        /// <summary>
+        /// Creates a new MARS session.
+        /// </summary>
+        public override SNIHandle CreateSession(TdsParserStateObject callbackObject, out SNIError sniError)
+        {
+            return _connection.CreateSession(callbackObject, out sniError);
         }
     }
 }

@@ -1011,12 +1011,13 @@ namespace System.Data.SqlClient
 
         internal SqlInternalConnectionTds GetOpenTdsConnection(string method)
         {
-            SqlInternalConnectionTds innerConnection = (InnerConnection as SqlInternalConnectionTds);
-            if (null == innerConnection)
+            DbConnectionInternal innerDbConnection = InnerConnection;
+            SqlInternalConnectionTds innerSqlConnection = (innerDbConnection as SqlInternalConnectionTds);
+            if (null == innerSqlConnection)
             {
-                throw ADP.OpenConnectionRequired(method, InnerConnection.State);
+                throw ADP.OpenConnectionRequired(method, innerDbConnection.State);
             }
-            return innerConnection;
+            return innerSqlConnection;
         }
 
         internal void OnInfoMessage(SqlInfoMessageEventArgs imevent)

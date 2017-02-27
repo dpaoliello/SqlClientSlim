@@ -1,20 +1,17 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 14
-VisualStudioVersion = 14.0.25123.0
+# Visual Studio 15
+VisualStudioVersion = 15.0.26206.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{AE1DE75F-7A85-488C-A5E4-F735001CEAA5}"
-	ProjectSection(SolutionItems) = preProject
-		global.json = global.json
-	EndProjectSection
 EndProject
-Project("{8BB2217D-0F2D-49D1-97BC-3654ED321F3B}") = "System.Data.SqlClient", "SqlClientSlim\System.Data.SqlClient.xproj", "{C461780C-6EA7-415A-868C-858AAA137B1C}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SqlClientSlim", "SqlClientSlim\SqlClientSlim.csproj", "{C461780C-6EA7-415A-868C-858AAA137B1C}"
 EndProject
-Project("{8BB2217D-0F2D-49D1-97BC-3654ED321F3B}") = "System.Data.SqlClient.Tests", "SqlClientSlimTests\System.Data.SqlClient.Tests.xproj", "{B759B9C6-DCC2-4427-B54F-AE782E3F0E60}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SqlClientSlimTests", "SqlClientSlimTests\SqlClientSlimTests.csproj", "{B759B9C6-DCC2-4427-B54F-AE782E3F0E60}"
 EndProject
-Project("{8BB2217D-0F2D-49D1-97BC-3654ED321F3B}") = "StressTest", "StressTest\StressTest.xproj", "{E8B3F614-BC38-4CCD-B878-5A2693EC53CC}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "StressTest", "StressTest\StressTest.csproj", "{E8B3F614-BC38-4CCD-B878-5A2693EC53CC}"
 EndProject
-Project("{8BB2217D-0F2D-49D1-97BC-3654ED321F3B}") = "PerfTestSlim", "PerfTest\Slim\PerfTestSlim.xproj", "{4B239BAC-47F5-49D8-B281-3ECE7E1C8A6E}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Slim", "PerfTest\Slim\Slim.csproj", "{4B239BAC-47F5-49D8-B281-3ECE7E1C8A6E}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PerfTestFull", "PerfTest\PerfTestFull.csproj", "{9151D8E7-75D5-4373-B725-7E5D8D38F238}"
 EndProject

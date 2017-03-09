@@ -1,2 +1,2 @@
 bin\Release\PerfTestFull.exe
-dotnet run -c Release -p Slim
+dotnet run -c Release -p Slim\Slim.csproj

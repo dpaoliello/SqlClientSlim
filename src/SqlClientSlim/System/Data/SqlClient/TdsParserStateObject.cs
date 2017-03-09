@@ -2040,12 +2040,7 @@ namespace System.Data.SqlClient
                 throw ADP.ClosedConnectionError();
             }
 
-#if MANAGED_SNI
-            SNIPacket readPacket = null;
-#else
-            IntPtr readPacket = IntPtr.Zero;
-#endif // MANAGED_SNI
-
+            SNIPacket readPacket = new SNIPacket(_inBuff);
             SNIError error;
 
             bool shouldDecrement = false;
@@ -2087,7 +2082,6 @@ namespace System.Data.SqlClient
                 }
                 else
                 { // Failure!
-                    Debug.Assert(readPacket == null || readPacket.IsInvalid, "unexpected readPacket without corresponding SNIPacketRelease");
                     ReadSniError(this, error);
                 }
             }
@@ -2262,7 +2256,7 @@ namespace System.Data.SqlClient
             }
 #endif
 
-            SNIPacket readPacket = null;
+            SNIPacket readPacket = new SNIPacket(_inBuff);
 
             try
             {
@@ -2314,12 +2308,6 @@ namespace System.Data.SqlClient
 
                 if (sniError != null)
                 { // FAILURE!
-#if MANAGED_SNI
-                    Debug.Assert(readPacket == null || readPacket.IsInvalid, "unexpected readPacket without corresponding SNIPacketRelease");
-#else
-                    Debug.Assert(IntPtr.Zero == readPacket, "unexpected readPacket without corresponding SNIPacketRelease");
-#endif // MANAGED_SNI
-
                     ReadSniError(this, sniError);
 #if DEBUG
                     if ((_forcePendingReadsToWaitForUser) && (_realNetworkPacketTaskSource != null))
@@ -2336,7 +2324,6 @@ namespace System.Data.SqlClient
                 }
                 else if (completedSync)
                 { // Success - process results!
-                    Debug.Assert(!readPacket.IsInvalid, "ReadNetworkPacket should not have been null on this async operation!");
                     // Evaluate this condition for MANAGED_SNI. This may not be needed because the network call is happening Async and only the callback can receive a success.
                     ReadAsyncCallback(readPacket, null);
                 }
@@ -2463,12 +2450,7 @@ namespace System.Data.SqlClient
                         {
                             stateObj.SendAttention(mustTakeWriteLock: true);
 
-#if MANAGED_SNI
                             SNIPacket syncReadPacket = null;
-#else
-                            IntPtr syncReadPacket = IntPtr.Zero;
-#endif
-
                             bool shouldDecrement = false;
                             try
                             {
@@ -2498,7 +2480,6 @@ namespace System.Data.SqlClient
                                 }
                                 else
                                 {
-                                    Debug.Assert(syncReadPacket == null || syncReadPacket.IsInvalid, "unexpected syncReadPacket without corresponding SNIPacketRelease");
                                     fail = true; // Subsequent read failed, time to give up.
                                 }
                             }
@@ -2629,11 +2610,6 @@ namespace System.Data.SqlClient
             bool processFinallyBlock = true;
             try
             {
-#if MANAGED_SNI
-                Debug.Assert(packet.IsInvalid || (!packet.IsInvalid && source != null), "AsyncResult null on callback");
-#else
-                Debug.Assert(IntPtr.Zero == packet || IntPtr.Zero != packet && source != null, "AsyncResult null on callback");
-#endif // MANAGED_SNI
                 if (_parser.MARSOn)
                 { // Only take reset lock on MARS and Async.
                     CheckSetResetConnectionState(error, CallbackType.Read);
@@ -3222,7 +3198,7 @@ namespace System.Data.SqlClient
                     return;
                 }
 
-                SNIPacket attnPacket = new SNIPacket(Handle);
+                SNIPacket attnPacket = new SNIPacket();
                 _sniAsyncAttnPacket = attnPacket;
 
                 attnPacket.SetData(SQL.AttentionHeader, TdsEnums.HEADER_LEN);
@@ -3291,7 +3267,7 @@ namespace System.Data.SqlClient
             }
             if (packet == null)
             {
-                packet = new SNIPacket(_sessionHandle);
+                packet = new SNIPacket();
             }
             packet.SetData(_outBuff, _outBytesUsed);
 

@@ -116,7 +116,7 @@ namespace System.Data.SqlClient.SNI
                 else
                 {
                     writeTask.ContinueWith(SendAsyncContinuation,
-                        Tuple.Create(packet, callback),
+                        Tuple.Create(this, packet, callback ?? _sendCallback),
                         CancellationToken.None,
                         TaskContinuationOptions.DenyChildAttach,
                         TaskScheduler.Default);
@@ -142,7 +142,7 @@ namespace System.Data.SqlClient.SNI
             if (forceCallback)
             {
                 Task.Factory.StartNew(SendAsyncErrorContinuation,
-                    Tuple.Create(packet, callback, sniError),
+                    Tuple.Create(packet, callback ?? _sendCallback, sniError),
                     CancellationToken.None,
                     TaskCreationOptions.DenyChildAttach,
                     TaskScheduler.Default);
@@ -155,51 +155,30 @@ namespace System.Data.SqlClient.SNI
             }
         }
 
-        private void SendAsyncErrorContinuation(object rawState)
+        private static void SendAsyncErrorContinuation(object rawState)
         {
             var state = (Tuple<SNIPacket, SNIAsyncCallback, SNIError>)rawState;
             SNIPacket packet = state.Item1;
             SNIAsyncCallback callback = state.Item2;
             SNIError sniError = state.Item3;
-            if (callback != null)
+            callback(packet, sniError);
+        }
+
+        private static void SendAsyncContinuation(Task task, object rawState)
+        {
+            var state = (Tuple<SNITransportHandle, SNIPacket, SNIAsyncCallback>)rawState;
+            SNITransportHandle handle = state.Item1;
+            SNIPacket packet = state.Item2;
+            SNIAsyncCallback callback = state.Item3;
+
+            if (task.IsFaulted)
             {
+                SNIError sniError = new SNIError(handle.ProviderNumber, 0, task.Exception);
                 callback(packet, sniError);
             }
             else
             {
-                _sendCallback(packet, sniError);
-            }
-        }
-
-        private void SendAsyncContinuation(Task task, object rawState)
-        {
-            var state = (Tuple<SNIPacket, SNIAsyncCallback>)rawState;
-            SNIPacket packet = state.Item1;
-            SNIAsyncCallback callback = state.Item2;
-
-            if (task.IsFaulted)
-            {
-                SNIError sniError = new SNIError(ProviderNumber, 0, task.Exception);
-
-                if (callback != null)
-                {
-                    callback(packet, sniError);
-                }
-                else
-                {
-                    _sendCallback(packet, sniError);
-                }
-            }
-            else
-            {
-                if (callback != null)
-                {
-                    callback(packet, null);
-                }
-                else
-                {
-                    _sendCallback(packet, null);
-                }
+                callback(packet, null);
             }
         }
 
@@ -210,7 +189,7 @@ namespace System.Data.SqlClient.SNI
         /// <returns>SNI error code</returns>
         public sealed override bool ReceiveAsync(bool forceCallback, ref SNIPacket packet, out SNIError sniError)
         {
-            packet = new SNIPacket(null);
+            packet = packet ?? new SNIPacket();
             packet.Allocate(_bufferSize);
 
             using (_debugLock.Acquire(this))
@@ -267,9 +246,10 @@ namespace System.Data.SqlClient.SNI
         /// <returns>SNI error code</returns>
         public sealed override SNIError Receive(ref SNIPacket packet, int timeoutInMilliseconds)
         {
+            packet = packet ?? new SNIPacket();
+
             using (_debugLock.Acquire(this))
             {
-                packet = null;
                 try
                 {
                     SNIError timeoutError = SetupTimeoutForReceive(timeoutInMilliseconds);
@@ -278,7 +258,6 @@ namespace System.Data.SqlClient.SNI
                         return timeoutError;
                     }
 
-                    packet = new SNIPacket(null);
                     packet.Allocate(_bufferSize);
                     packet.ReadFromStream(_stream);
 

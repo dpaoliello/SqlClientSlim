@@ -139,7 +139,7 @@ namespace System.Data.SqlClient.SNI
             Debug.Assert(Monitor.IsEntered(this), "HandleReceiveError was called without being locked.");
             foreach (SNIMarsHandle handle in _sessions.Values)
             {
-                handle.HandleReceiveError(new SNIPacket(handle), sniError);
+                handle.HandleReceiveError(new SNIPacket(), sniError);
             }
             _lowerHandle.Dispose();
         }
@@ -170,6 +170,7 @@ namespace System.Data.SqlClient.SNI
                 }
             }
 
+            int packetOffset = 0;
             while (true)
             {
                 lock (this)
@@ -184,11 +185,13 @@ namespace System.Data.SqlClient.SNI
 
                         while (_currentHeaderByteCount != SNISMUXHeader.HEADER_LENGTH)
                         {
-                            int bytesTaken = packet.TakeData(_headerBytes, _currentHeaderByteCount, SNISMUXHeader.HEADER_LENGTH - _currentHeaderByteCount);
+                            int bytesTaken = packet.TakeData(packetOffset, _headerBytes, _currentHeaderByteCount, SNISMUXHeader.HEADER_LENGTH - _currentHeaderByteCount);
+                            packetOffset += bytesTaken;
                             _currentHeaderByteCount += bytesTaken;
 
                             if (bytesTaken == 0)
                             {
+                                packetOffset = 0;
                                 ReceiveAsync(ref packet);
                                 return;
                             }
@@ -205,7 +208,7 @@ namespace System.Data.SqlClient.SNI
                         };
 
                         _dataBytesLeft = (int)_currentHeader.length;
-                        _currentPacket = new SNIPacket(null);
+                        _currentPacket = new SNIPacket();
                         _currentPacket.Allocate((int)_currentHeader.length);
                     }
 
@@ -216,11 +219,13 @@ namespace System.Data.SqlClient.SNI
                     {
                         if (_dataBytesLeft > 0)
                         {
-                            int length = packet.TakeData(_currentPacket, _dataBytesLeft);
+                            int length = packet.TakeData(packetOffset, _currentPacket, _dataBytesLeft);
+                            packetOffset += length;
                             _dataBytesLeft -= length;
 
                             if (_dataBytesLeft > 0)
                             {
+                                packetOffset = 0;
                                 ReceiveAsync(ref packet);
                                 return;
                             }
@@ -261,8 +266,9 @@ namespace System.Data.SqlClient.SNI
 
                 lock (this)
                 {
-                    if (packet.DataLeft == 0)
+                    if (packet.Length - packetOffset == 0)
                     {
+                        packetOffset = 0;
                         ReceiveAsync(ref packet);
                         return;
                     }

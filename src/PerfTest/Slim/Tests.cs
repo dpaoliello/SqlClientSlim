@@ -90,7 +90,7 @@ namespace PerfTest
                 command.Parameters.Add(new SqlParameter("data", outStream));
 
                 connection.OpenAsync().Wait();
-                using (var reader = command.ExecuteReaderAsync().Result)
+                using (var reader = command.ExecuteReaderAsync(CommandBehavior.SequentialAccess).Result)
                 {
                     reader.ReadAsync().Wait();
 

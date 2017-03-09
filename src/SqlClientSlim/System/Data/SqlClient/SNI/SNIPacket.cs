@@ -11,12 +11,10 @@ namespace System.Data.SqlClient.SNI
     /// <summary>
     /// SNI Packet
     /// </summary>
-    internal sealed class SNIPacket : IEquatable<SNIPacket>
+    internal sealed class SNIPacket
     {
         private byte[] _data;
         private int _length;
-        private int _capacity;
-        private int _offset;
 #if DEBUG
         private string _description;
 #endif
@@ -25,10 +23,19 @@ namespace System.Data.SqlClient.SNI
         /// <summary>
         /// Constructor
         /// </summary>
-        /// <param name="handle">Owning SNI handle</param>
-        public SNIPacket(SNIHandle handle)
+        public SNIPacket()
         {
-            _offset = 0;
+        }
+
+        public SNIPacket(byte[] buffer)
+        {
+            _data = buffer;
+        }
+
+        public SNIPacket(byte[] buffer, int length)
+        {
+            _data = buffer;
+            _length = length;
         }
 
 #if DEBUG
@@ -50,17 +57,6 @@ namespace System.Data.SqlClient.SNI
 #endif
 
         /// <summary>
-        /// Data left to process
-        /// </summary>
-        public int DataLeft
-        {
-            get
-            {
-                return _length - _offset;
-            }
-        }
-
-        /// <summary>
         /// Length of data
         /// </summary>
         public int Length
@@ -68,17 +64,6 @@ namespace System.Data.SqlClient.SNI
             get
             {
                 return _length;
-            }
-        }
-
-        /// <summary>
-        /// Packet validity
-        /// </summary>
-        public bool IsInvalid
-        {
-            get
-            {
-                return _data == null;
             }
         }
 
@@ -106,9 +91,8 @@ namespace System.Data.SqlClient.SNI
         /// <param name="capacity">Bytes to allocate</param>
         public void Allocate(int capacity)
         {
-            if (_capacity != capacity)
+            if ((_data == null) || (_data.Length < capacity))
             {
-                _capacity = capacity;
                 _data = new byte[capacity];
             }
         }
@@ -120,7 +104,10 @@ namespace System.Data.SqlClient.SNI
         /// <param name="dataSize">Data in packet</param>
         public void GetData(byte[] buffer, ref int dataSize)
         {
-            Buffer.BlockCopy(_data, 0, buffer, 0, _length);
+            if (_data != buffer)
+            {
+                Buffer.BlockCopy(_data, 0, buffer, 0, _length);
+            }
             dataSize = _length;
         }
 
@@ -133,8 +120,6 @@ namespace System.Data.SqlClient.SNI
         {
             _data = data;
             _length = length;
-            _capacity = length;
-            _offset = 0;
         }
 
         /// <summary>
@@ -143,9 +128,9 @@ namespace System.Data.SqlClient.SNI
         /// <param name="packet">Packet</param>
         /// <param name="size">Data to take</param>
         /// <returns>Amount of data taken</returns>
-        public int TakeData(SNIPacket packet, int size)
+        public int TakeData(int offset, SNIPacket packet, int size)
         {
-            int dataSize = TakeData(packet._data, packet._length, size);
+            int dataSize = TakeData(offset, packet._data, packet._length, size);
             packet._length += dataSize;
             return dataSize;
         }
@@ -175,33 +160,23 @@ namespace System.Data.SqlClient.SNI
         /// Take data from packet and advance offset
         /// </summary>
         /// <param name="buffer">Buffer</param>
-        /// <param name="dataOffset">Data offset</param>
+        /// <param name="bufferOffset">Data offset</param>
         /// <param name="size">Size</param>
         /// <returns></returns>
-        public int TakeData(byte[] buffer, int dataOffset, int size)
+        public int TakeData(int packetOffset, byte[] buffer, int bufferOffset, int size)
         {
-            if (_offset >= _length)
+            if (packetOffset >= _length)
             {
                 return 0;
             }
 
-            if (_offset + size > _length)
+            if (packetOffset + size > _length)
             {
-                size = _length - _offset;
+                size = _length - packetOffset;
             }
 
-            Buffer.BlockCopy(_data, _offset, buffer, dataOffset, size);
-            _offset = _offset + size;
+            Buffer.BlockCopy(_data, packetOffset, buffer, bufferOffset, size);
             return size;
-        }
-
-        /// <summary>
-        /// Reset packet 
-        /// </summary>
-        public void Reset()
-        {
-            _length = 0;
-            Array.Clear(_data, 0, _capacity);
         }
 
         /// <summary>
@@ -211,35 +186,38 @@ namespace System.Data.SqlClient.SNI
         /// <param name="callback">Completion callback</param>
         public void ReadFromStreamAsync(Stream stream, SNIAsyncCallback callback)
         {
-            stream.ReadAsync(_data, 0, _capacity).ContinueWith(
+            _completionCallback = callback;
+            stream.ReadAsync(_data, 0, _data.Length).ContinueWith(
                 ReadFromStreamAsyncContinuation,
-                callback,
+                this,
                 CancellationToken.None,
                 TaskContinuationOptions.DenyChildAttach,
                 TaskScheduler.Default);
         }
 
-        private void ReadFromStreamAsyncContinuation(Task<int> t, object state)
+        private static void ReadFromStreamAsyncContinuation(Task<int> t, object state)
         {
-            SNIAsyncCallback callback = (SNIAsyncCallback)state;
+            SNIPacket packet = (SNIPacket)state;
             SNIError error = null;
 
-            Exception e = t.Exception != null ? t.Exception.InnerException : null;
+            Exception e = t.Exception?.InnerException;
             if (e != null)
             {
                 error = new SNIError(SNIProviders.TCP_PROV, 0, 0, e.Message);
             }
             else
             {
-                _length = t.Result;
+                packet._length = t.Result;
 
-                if (_length == 0)
+                if (packet._length == 0)
                 {
                     error = new SNIError(SNIProviders.TCP_PROV, 0, SNICommon.ConnTerminatedError, string.Empty);
                 }
             }
 
-            callback(this, error);
+            SNIAsyncCallback callback = packet._completionCallback;
+            packet._completionCallback = null;
+            callback(packet, error);
         }
 
         /// <summary>
@@ -248,7 +226,7 @@ namespace System.Data.SqlClient.SNI
         /// <param name="stream">Stream to read from</param>
         public void ReadFromStream(Stream stream)
         {
-            _length = stream.Read(_data, 0, _capacity);
+            _length = stream.Read(_data, 0, _data.Length);
         }
 
         /// <summary>
@@ -267,47 +245,6 @@ namespace System.Data.SqlClient.SNI
         public Task WriteToStreamAsync(Stream stream)
         {
             return stream.WriteAsync(_data, 0, _length);
-        }
-
-        /// <summary>
-        /// Get hash code
-        /// </summary>
-        /// <returns>Hash code</returns>
-        public override int GetHashCode()
-        {
-            return base.GetHashCode();
-        }
-
-        /// <summary>
-        /// Check packet equality
-        /// </summary>
-        /// <param name="obj"></param>
-        /// <returns>true if equal</returns>
-        public override bool Equals(object obj)
-        {
-            SNIPacket packet = obj as SNIPacket;
-
-            if (packet != null)
-            {
-                return Equals(packet);
-            }
-
-            return false;
-        }
-
-        /// <summary>
-        /// Check packet equality
-        /// </summary>
-        /// <param name="obj"></param>
-        /// <returns>true if equal</returns>
-        public bool Equals(SNIPacket packet)
-        {
-            if (packet != null)
-            {
-                return object.ReferenceEquals(packet, this);
-            }
-
-            return false;
         }
     }
 }

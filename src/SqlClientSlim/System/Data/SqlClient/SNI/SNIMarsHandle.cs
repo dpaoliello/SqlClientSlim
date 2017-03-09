@@ -81,8 +81,7 @@ namespace System.Data.SqlClient.SNI
                 GetSMUXHeaderBytes(0, (byte)flags, ref headerBytes);
             }
 
-            SNIPacket packet = new SNIPacket(null);
-            packet.SetData(headerBytes, SNISMUXHeader.HEADER_LENGTH);
+            SNIPacket packet = new SNIPacket(headerBytes, SNISMUXHeader.HEADER_LENGTH);
 
             if (async)
             {
@@ -136,7 +135,7 @@ namespace System.Data.SqlClient.SNI
             byte[] headerBytes = null;
             GetSMUXHeaderBytes(packet.Length, (byte)SNISMUXFlags.SMUX_DATA, ref headerBytes);
 
-            SNIPacket smuxPacket = new SNIPacket(null);
+            SNIPacket smuxPacket = new SNIPacket();
 #if DEBUG
             smuxPacket.Description = string.Format("({0}) SMUX packet {1}", packet.Description == null ? "" : packet.Description, xSequenceNumber);
 #endif
@@ -424,7 +423,6 @@ namespace System.Data.SqlClient.SNI
         /// <returns>SNI error code</returns>
         public override SNIError Receive(ref SNIPacket packet, int timeout)
         {
-            packet = null;
             int queueCount;
             uint result = TdsEnums.SNI_SUCCESS_IO_PENDING;
 

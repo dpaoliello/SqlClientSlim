@@ -87,7 +87,7 @@ namespace System.Data.SqlClient.SNI
             if (async)
             {
                 SNIError sniError;
-                _connection.SendAsync(packet, (sentPacket, error) => { }, false, out sniError);
+                _connection.SendAsync(packet, NullCallback, false, out sniError);
                 return sniError;
             }
             else
@@ -95,6 +95,9 @@ namespace System.Data.SqlClient.SNI
                 return _connection.Send(packet);
             }
         }
+
+        private static void NullCallback(SNIPacket packet, SNIError error)
+        { }
 
         /// <summary>
         /// Generate SMUX header 
@@ -212,8 +215,6 @@ namespace System.Data.SqlClient.SNI
         /// <returns>True if all packets finished sending sync or an error occurred, otherwise false</returns>
         private void SendPendingPackets()
         {
-            SNIMarsQueuedPacket packet = null;
-
             while (true)
             {
                 lock (this)
@@ -222,7 +223,7 @@ namespace System.Data.SqlClient.SNI
                     {
                         if (_sendPacketQueue.Count != 0)
                         {
-                            packet = _sendPacketQueue.Peek();
+                            SNIMarsQueuedPacket packet = _sendPacketQueue.Peek();
                             if (!InternalSendAsync(packet.Packet, packet.Callback))
                             {
                                 return;

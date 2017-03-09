@@ -114,20 +114,6 @@ namespace System.Data.SqlClient.SNI
         }
 
         /// <summary>
-        /// Clone packet
-        /// </summary>
-        /// <returns>Cloned packet</returns>
-        public SNIPacket Clone()
-        {
-            SNIPacket packet = new SNIPacket(null);
-            packet._data = new byte[_length];
-            Buffer.BlockCopy(_data, 0, packet._data, 0, _length);
-            packet._length = _length;
-
-            return packet;
-        }
-
-        /// <summary>
         /// Get packet data
         /// </summary>
         /// <param name="inBuff">Buffer</param>

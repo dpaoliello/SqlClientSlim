@@ -410,7 +410,7 @@ namespace System.Data.SqlClient
             try { }   // EmptyTry/Finally to avoid FXCop violation
             finally
             {
-                _physicalStateObj.ClearAllWritePackets();
+                _physicalStateObj.AssertNoPendingWrites();
             }
         }
 
@@ -766,7 +766,7 @@ namespace System.Data.SqlClient
                             try { } // EmptyTry/Finally to avoid FXCop violation
                             finally
                             {
-                                _physicalStateObj.ClearAllWritePackets();
+                                _physicalStateObj.AssertNoPendingWrites();
                             }
                         }
 
@@ -2117,7 +2117,7 @@ namespace System.Data.SqlClient
                         {
                             // If packet size changed, we need to release our SNIPackets since
                             // those are tied to packet size of connection.
-                            _physicalStateObj.ClearAllWritePackets();
+                            _physicalStateObj.AssertNoPendingWrites();
 
                             // Update SNI ConsumerInfo value to be resulting packet size
                             _physicalStateObj.Handle.SetBufferSize(packetSize);

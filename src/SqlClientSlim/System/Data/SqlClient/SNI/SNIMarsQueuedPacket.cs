@@ -8,11 +8,8 @@ namespace System.Data.SqlClient.SNI
     /// <summary>
     /// Mars queued packet
     /// </summary>
-    internal class SNIMarsQueuedPacket
+    internal struct SNIMarsQueuedPacket
     {
-        private SNIPacket _packet;
-        private SNIAsyncCallback _callback;
-
         /// <summary>
         /// Constructor
         /// </summary>
@@ -20,40 +17,18 @@ namespace System.Data.SqlClient.SNI
         /// <param name="callback">Completion callback</param>
         public SNIMarsQueuedPacket(SNIPacket packet, SNIAsyncCallback callback)
         {
-            _packet = packet;
-            _callback = callback;
+            Packet = packet;
+            Callback = callback;
         }
 
         /// <summary>
         /// SNI packet
         /// </summary>
-        public SNIPacket Packet
-        {
-            get
-            {
-                return _packet;
-            }
-
-            set
-            {
-                _packet = value;
-            }
-        }
+        public SNIPacket Packet { get; }
 
         /// <summary>
         /// Completion callback
         /// </summary>
-        public SNIAsyncCallback Callback
-        {
-            get
-            {
-                return _callback;
-            }
-
-            set
-            {
-                _callback = value;
-            }
-        }
+        public SNIAsyncCallback Callback { get; }
     }
 }

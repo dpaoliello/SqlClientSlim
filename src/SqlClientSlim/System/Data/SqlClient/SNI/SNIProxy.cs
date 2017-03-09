@@ -51,26 +51,6 @@ namespace System.Data.SqlClient.SNI
         }
 
         /// <summary>
-        /// Send a packet
-        /// </summary>
-        /// <param name="handle">SNI handle</param>
-        /// <param name="packet">SNI packet</param>
-        /// <param name="sync">true if synchronous, false if asynchronous</param>
-        /// <returns>True if completed synchronous, otherwise false</returns>
-        public static bool WritePacket(SNIHandle handle, SNIPacket packet, bool sync, out SNIError sniError)
-        {
-            if (sync)
-            {
-                sniError = handle.Send(packet.Clone());
-                return true;
-            }
-            else
-            {
-                return handle.SendAsync(packet.Clone(), null, false, out sniError);
-            }
-        }
-
-        /// <summary>
         /// Create a SNI connection handle
         /// </summary>
         /// <param name="callbackObject">Asynchronous I/O callback object</param>

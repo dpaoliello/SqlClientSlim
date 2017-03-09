@@ -26,6 +26,7 @@ namespace System.Data.SqlClient
     sealed internal class TdsParserStateObject
     {
         private const int AttentionTimeoutSeconds = 5;
+        private const int MaxWritePacketCacheSize = 16;
 
         // Ticks to consider a connection "good" after a successful I/O (10,000 ticks = 1 ms)
         // The resolution of the timer is typically in the range 10 to 16 milliseconds according to msdn.
@@ -74,8 +75,8 @@ namespace System.Data.SqlClient
         internal bool _bulkCopyOpperationInProgress = false;        // Set to true during bulk copy and used to turn toggle write timeouts.
         internal bool _bulkCopyWriteTimeout = false;                // Set to trun when _bulkCopyOpeperationInProgress is trun and write timeout happens
 
-        // SNI variables                                                     // multiple resultsets in one batch.
-        private SNIPacket _sniPacket = null;                // Will have to re-vamp this for MARS
+        // SNI variables
+        private SNIPacket _writePacketCache = null;                   // Cached packet to use when writing
         internal SNIPacket _sniAsyncAttnPacket = null;                // Packet to use to send Attn
 
         // Async variables
@@ -816,11 +817,9 @@ namespace System.Data.SqlClient
 
         internal void Dispose()
         {
-            SNIPacket packetHandle = _sniPacket;
             SNIHandle sessionHandle = _sessionHandle;
             SNIPacket asyncAttnPacket = _sniAsyncAttnPacket;
 
-            _sniPacket = null;
             _sessionHandle = null;
             _sniAsyncAttnPacket = null;
 
@@ -844,7 +843,7 @@ namespace System.Data.SqlClient
                 SpinWait.SpinUntil(() => Volatile.Read(ref _readingCount) == 0);
             }
 
-            if (null != sessionHandle || null != packetHandle)
+            if (null != sessionHandle)
             {
                 try { }
                 finally
@@ -2728,7 +2727,12 @@ namespace System.Data.SqlClient
 #pragma warning disable 0420 // a reference to a volatile field will not be treated as volatile
 
         public void WriteAsyncCallback(SNIPacket packet, SNIError sniError)
-        { // Key never used.
+        {
+            if ((packet != null) && (_writePacketCache == null))
+            {
+                _writePacketCache = packet;
+            }
+
             try
             {
                 if (sniError != null)
@@ -3098,14 +3102,22 @@ namespace System.Data.SqlClient
             }
 
             // Async operation completion may be delayed (success pending).
-            bool completedSync = false;
-            SNIError sniError = null;
+            bool completedSync;
+            SNIError sniError;
             try
             {
             }
             finally
             {
-                completedSync = SNIProxy.WritePacket(handle, packet, sync, out sniError);
+                if (sync)
+                {
+                    sniError = handle.Send(packet);
+                    completedSync = true;
+                }
+                else
+                {
+                    completedSync = handle.SendAsync(packet, callback: null, forceCallback: false, error: out sniError);
+                }
             }
             if (!completedSync)
             {
@@ -3135,54 +3147,62 @@ namespace System.Data.SqlClient
                     }
                 }
             }
-#if DEBUG
-            else if (!sync && !canAccumulate && SqlCommand.DebugForceAsyncWriteDelay > 0)
-            {
-                // Executed synchronously - callback will not be called 
-                TaskCompletionSource<object> completion = new TaskCompletionSource<object>();
-                SNIError error = sniError;
-                new Timer(obj =>
-                {
-                    try
-                    {
-                        if (_parser.MARSOn)
-                        { // Only take reset lock on MARS.
-                            CheckSetResetConnectionState(error, CallbackType.Write);
-                        }
-
-                        if (error != null)
-                        {
-                            AddError(_parser.ProcessSNIError(this, error));
-                            ThrowExceptionAndWarning();
-                        }
-                        AssertValidState();
-                        completion.SetResult(null);
-                    }
-                    catch (Exception e)
-                    {
-                        completion.SetException(e);
-                    }
-                }, null, SqlCommand.DebugForceAsyncWriteDelay, Timeout.Infinite);
-                task = completion.Task;
-            }
-#endif
             else
             {
-                if (_parser.MARSOn)
-                { // Only take reset lock on MARS.
-                    CheckSetResetConnectionState(sniError, CallbackType.Write);
+                if (_writePacketCache == null)
+                {
+                    _writePacketCache = packet;
                 }
 
-                if (sniError == null)
+#if DEBUG
+                if (!sync && !canAccumulate && SqlCommand.DebugForceAsyncWriteDelay > 0)
                 {
-                    _lastSuccessfulIOTimer._value = DateTime.UtcNow.Ticks;
+                    // Executed synchronously - callback will not be called 
+                    TaskCompletionSource<object> completion = new TaskCompletionSource<object>();
+                    SNIError error = sniError;
+                    new Timer(obj =>
+                    {
+                        try
+                        {
+                            if (_parser.MARSOn)
+                            { // Only take reset lock on MARS.
+                            CheckSetResetConnectionState(error, CallbackType.Write);
+                            }
+
+                            if (error != null)
+                            {
+                                AddError(_parser.ProcessSNIError(this, error));
+                                ThrowExceptionAndWarning();
+                            }
+                            AssertValidState();
+                            completion.SetResult(null);
+                        }
+                        catch (Exception e)
+                        {
+                            completion.SetException(e);
+                        }
+                    }, null, SqlCommand.DebugForceAsyncWriteDelay, Timeout.Infinite);
+                    task = completion.Task;
                 }
+#endif
                 else
                 {
-                    AddError(_parser.ProcessSNIError(this, sniError));
-                    ThrowExceptionAndWarning(callerHasConnectionLock);
+                    if (_parser.MARSOn)
+                    { // Only take reset lock on MARS.
+                        CheckSetResetConnectionState(sniError, CallbackType.Write);
+                    }
+
+                    if (sniError == null)
+                    {
+                        _lastSuccessfulIOTimer._value = DateTime.UtcNow.Ticks;
+                    }
+                    else
+                    {
+                        AddError(_parser.ProcessSNIError(this, sniError));
+                        ThrowExceptionAndWarning(callerHasConnectionLock);
+                    }
+                    AssertValidState();
                 }
-                AssertValidState();
             }
             return task;
         }
@@ -3264,7 +3284,15 @@ namespace System.Data.SqlClient
         private Task WriteSni(bool canAccumulate)
         {
             // Prepare packet, and write to packet.
-            SNIPacket packet = GetResetWritePacket();
+            SNIPacket packet = null;
+            if (_writePacketCache != null)
+            {
+                packet = Interlocked.Exchange(ref _writePacketCache, null);
+            }
+            if (packet == null)
+            {
+                packet = new SNIPacket(_sessionHandle);
+            }
             packet.SetData(_outBuff, _outBytesUsed);
 
             Debug.Assert(Parser.Connection._parserLock.ThreadMayHaveLock(), "Thread is writing without taking the connection lock");
@@ -3305,7 +3333,7 @@ namespace System.Data.SqlClient
                 _parser.EncryptionOptions = EncryptionOptions.OFF; // Turn encryption off.
 
                 // Since this packet was associated with encryption, dispose and re-create.
-                ClearAllWritePackets();
+                AssertNoPendingWrites();
             }
 
             SniWriteStatisticsAndTracing();
@@ -3316,22 +3344,10 @@ namespace System.Data.SqlClient
             return task;
         }
 
-        internal SNIPacket GetResetWritePacket()
-        {
-            if (_sniPacket == null)
-            {
-                _sniPacket = new SNIPacket(_sessionHandle);
-            }
-            return _sniPacket;
-        }
-
-        internal void ClearAllWritePackets()
+        [Conditional("DEBUG")]
+        internal void AssertNoPendingWrites()
         {
             Debug.Assert(_asyncWriteCount == 0, "Should not clear all write packets if there are packets pending");
-            if (_sniPacket != null)
-            {
-                _sniPacket = null;
-            }
         }
 
         //////////////////////////////////////////////

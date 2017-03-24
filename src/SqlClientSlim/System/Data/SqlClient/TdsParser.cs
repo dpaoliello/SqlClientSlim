@@ -1130,36 +1130,18 @@ namespace System.Data.SqlClient
             }
             else
             {
-#if MANAGED_SNI
                 // SNI error. Append additional error message info if available.
                 //
                 string sniLookupMessage = SQL.GetSNIErrorMessage((int)sniError.sniError);
-                errorMessage =  (sniError.errorMessage != null) ?
+                errorMessage =  !string.IsNullOrEmpty(sniError.errorMessage) ?
                                 (sniLookupMessage + ": " + sniError.errorMessage) :
                                 sniLookupMessage;
-#else
-                // SNI error. Replace the entire message.
-                //
-                errorMessage = SQL.GetSNIErrorMessage((int)sniError.sniError);
-
-                // If its a LocalDB error, then nativeError actually contains a LocalDB-specific error code, not a win32 error code
-                if (sniError.sniError == (int)SNINativeMethodWrapper.SniSpecialErrors.LocalDBErrorCode)
-                {
-                    errorMessage += LocalDBAPI.GetLocalDBMessage((int)sniError.nativeError);
-                    win32ErrorCode = 0;
-                }
-#endif // MANAGED_SNI
             }
             errorMessage = String.Format((IFormatProvider)null, "{0} (provider: {1}, error: {2} - {3})",
                 sqlContextInfo, providerName, (int)sniError.sniError, errorMessage);
 
-#if MANAGED_SNI
             return new SqlError((int)sniError.nativeError, 0x00, TdsEnums.FATAL_ERROR_CLASS,
                                 _server, errorMessage, sniError.function, (int)sniError.lineNumber, win32ErrorCode, sniError.exception);
-#else
-            return new SqlError((int)sniError.nativeError, 0x00, TdsEnums.FATAL_ERROR_CLASS,
-                    _server, errorMessage, sniError.function, (int)sniError.lineNumber, win32ErrorCode);
-#endif
         }
 
         internal void CheckResetConnection(TdsParserStateObject stateObj)

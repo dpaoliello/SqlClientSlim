@@ -589,6 +589,9 @@ namespace System.Data.SqlClient
                         // Ensure that, once we have the lock, that we are still the owner
                         if ((!_cancelled) && (_owner.Target == caller))
                         {
+                            // Wait for any pending reads to complete
+                            SpinWait.SpinUntil(() => Volatile.Read(ref _readingCount) == 0);
+
                             _cancelled = true;
 
                             if (_pendingData && !_attentionSent)

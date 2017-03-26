@@ -906,6 +906,10 @@ namespace System.Data.SqlClient
             }
         }
 
+        /// <summary>
+        /// Gets the TdsParser associated with this connection if there is one, otherwise returns null.
+        /// </summary>
+        internal TdsParser TryGetParser() => (InnerConnection as SqlInternalConnectionTds)?.Parser;
 
         //
         // INTERNAL METHODS

@@ -112,7 +112,7 @@ namespace System.Data.SqlClient
             internal void SetActiveConnectionAndResult(TaskCompletionSource<object> completion, string endMethod, SqlConnection activeConnection)
             {
                 Debug.Assert(activeConnection != null, "Unexpected null connection argument on SetActiveConnectionAndResult!");
-                TdsParser parser = activeConnection.Parser;
+                TdsParser parser = activeConnection.TryGetParser();
                 if ((parser == null) || (parser.State == TdsParserState.Closed) || (parser.State == TdsParserState.Broken))
                 {
                     throw ADP.ClosedConnectionError();
@@ -1846,11 +1846,8 @@ namespace System.Data.SqlClient
                 }
             }
 
-            // make sure we have good parameter information
             // prepare the command
             // execute
-            Debug.Assert(null != _activeConnection.Parser, "TdsParser class should not be null in Command.Execute!");
-
             bool inSchema = (0 != (cmdBehavior & CommandBehavior.SchemaOnly));
 
             task = null;
@@ -2226,7 +2223,7 @@ namespace System.Data.SqlClient
 
             if (parser == null)
             {
-                parser = _activeConnection.Parser;
+                parser = _activeConnection.TryGetParser();
                 if ((parser == null) || (parser.State == TdsParserState.Broken) || (parser.State == TdsParserState.Closed))
                 {
                     // Connection's parser is null as well, therefore we must be closed

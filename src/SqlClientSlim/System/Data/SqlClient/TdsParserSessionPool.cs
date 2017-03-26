@@ -24,10 +24,8 @@ namespace System.Data.SqlClient
 
         private const int MaxInactiveCount = 10; // pick something, preferably small...
 
-
         private readonly TdsParser _parser;       // parser that owns us
         private readonly List<TdsParserStateObject> _cache;        // collection of all known sessions 
-        private int _cachedCount;  // lock-free _cache.Count
         private TdsParserStateObject[] _freeStateObjects; // collection of all sessions available for reuse
         private int _freeStateObjectCount; // Number of available free sessions
 
@@ -39,14 +37,7 @@ namespace System.Data.SqlClient
             _freeStateObjectCount = 0;
         }
 
-        private bool IsDisposed
-        {
-            get
-            {
-                return (null == _freeStateObjects);
-            }
-        }
-
+        private bool IsDisposed => (null == _freeStateObjects);
 
         internal void Deactivate()
         {
@@ -54,91 +45,93 @@ namespace System.Data.SqlClient
             // cache to make sure they're cleaned up and then we dispose of
             // sessions that are past what we want to keep around.
 
+            List<TdsParserStateObject> orphanedSessions = null;
             lock (_cache)
             {
-                // NOTE: The PutSession call below may choose to remove the 
-                //       session from the cache, which will throw off our 
-                //       enumerator.  We avoid that by simply indexing backward
-                //       through the array.
-
-                for (int i = _cache.Count - 1; i >= 0; i--)
+                foreach (TdsParserStateObject session in _cache)
                 {
-                    TdsParserStateObject session = _cache[i];
-
-                    if (null != session)
+                    if (session.IsOrphaned)
                     {
-                        if (session.IsOrphaned)
+                        if (orphanedSessions == null)
                         {
-                            // TODO: consider adding a performance counter for the number of sessions we reclaim
-
-
-                            PutSession(session);
+                            orphanedSessions = new List<TdsParserStateObject>(_cache.Count);
                         }
+                        orphanedSessions.Add(session);
                     }
                 }
-                // TODO: re-enable this assert when the connection isn't doomed.
-                //Debug.Assert (_cachedCount < MaxInactiveCount, "non-orphaned connection past initial allocation?");
             }
-        }
 
-        // This is called from a ThreadAbort - ensure that it can be run from a CER Catch
-        internal void BestEffortCleanup()
-        {
-            for (int i = 0; i < _cache.Count; i++)
+            if (orphanedSessions != null)
             {
-                TdsParserStateObject session = _cache[i];
-                if (null != session)
+                foreach (TdsParserStateObject orphanedSession in orphanedSessions)
                 {
-                    var sessionHandle = session.Handle;
-                    if (sessionHandle != null)
-                    {
-                        sessionHandle.Dispose();
-                    }
+                    PutSession(orphanedSession);
                 }
             }
         }
 
         internal void Dispose()
         {
+            TdsParserStateObject[] freeStateObjects;
+            int freeStateObjectCount;
+            List<TdsParserStateObject> orphanedSessions = null;
             lock (_cache)
             {
-                // Dispose free sessions
-                for (int i = 0; i < _freeStateObjectCount; i++)
-                {
-                    if (_freeStateObjects[i] != null)
-                    {
-                        _freeStateObjects[i].Dispose();
-                    }
-                }
+                freeStateObjects = _freeStateObjects;
+                freeStateObjectCount = _freeStateObjectCount;
                 _freeStateObjects = null;
                 _freeStateObjectCount = 0;
 
-                // Dispose orphaned sessions
                 for (int i = 0; i < _cache.Count; i++)
                 {
-                    if (_cache[i] != null)
+                    if (_cache[i].IsOrphaned)
                     {
-                        if (_cache[i].IsOrphaned)
+                        if (orphanedSessions == null)
                         {
-                            _cache[i].Dispose();
+                            orphanedSessions = new List<TdsParserStateObject>();
                         }
-                        else
-                        {
-                            // Remove the "initial" callback
-                            _cache[i].DecrementPendingCallbacks();
-                        }
+                        orphanedSessions.Add(_cache[i]);
+                    }
+                    else
+                    {
+                        // Remove the "initial" callback
+                        _cache[i].DecrementPendingCallbacks();
                     }
                 }
                 _cache.Clear();
-                _cachedCount = 0;
                 // Any active sessions will take care of themselves
                 // (It's too dangerous to dispose them, as this can cause AVs)
+            }
+
+            // Dispose free sessions
+            _parser.Connection._parserLock.Wait(canReleaseFromAnyThread: false);
+            try
+            {
+                for (int i = 0; i < freeStateObjectCount; i++)
+                {
+                    if (freeStateObjects[i] != null)
+                    {
+                        freeStateObjects[i].Dispose();
+                    }
+                }
+                if (orphanedSessions != null)
+                {
+                    foreach (TdsParserStateObject orphanedSession in orphanedSessions)
+                    {
+                        orphanedSession.Dispose();
+                    }
+                }
+            }
+            finally
+            {
+                _parser.Connection._parserLock.Release();
             }
         }
 
         internal TdsParserStateObject GetSession(object owner)
         {
             TdsParserStateObject session;
+            bool createSession = false;
             lock (_cache)
             {
                 if (IsDisposed)
@@ -155,17 +148,31 @@ namespace System.Data.SqlClient
                 }
                 else
                 {
-                    // No free objects, create a new one
-                    session = _parser.CreateSession();
-
-
-                    _cache.Add(session);
-                    _cachedCount = _cache.Count;
+                    // No free objects, create a new on
+                    session = null;
+                    createSession = true;
                 }
-
-                session.Activate(owner);
             }
 
+            if (createSession)
+            {
+                _parser.Connection._parserLock.Wait(canReleaseFromAnyThread: false);
+                try
+                {
+                    session = _parser.CreateSession();
+                }
+                finally
+                {
+                    _parser.Connection._parserLock.Release();
+                }
+
+                lock (_cache)
+                {
+                    _cache.Add(session);
+                }
+            }
+
+            session.Activate(owner);
 
             return session;
         }
@@ -173,17 +180,26 @@ namespace System.Data.SqlClient
         internal void PutSession(TdsParserStateObject session)
         {
             Debug.Assert(null != session, "null session?");
-            //Debug.Assert(null != session.Owner, "session without owner?");
 
-            bool okToReuse = session.Deactivate();
+            bool okToReuse;
+            _parser.Connection._parserLock.Wait(canReleaseFromAnyThread: false);
+            try
+            {
+                okToReuse = session.Deactivate();
+            }
+            finally
+            {
+                _parser.Connection._parserLock.Release();
+            }
 
+            bool disposeSession = false;
             lock (_cache)
             {
                 if (IsDisposed)
                 {
                     // We're diposed - just clean out the session
-                    Debug.Assert(_cachedCount == 0, "SessionPool is disposed, but there are still sessions in the cache?");
-                    session.Dispose();
+                    Debug.Assert(_cache.Count == 0, "SessionPool is disposed, but there are still sessions in the cache?");
+                    disposeSession = true;
                 }
                 else if ((okToReuse) && (_freeStateObjectCount < MaxInactiveCount))
                 {
@@ -199,22 +215,27 @@ namespace System.Data.SqlClient
 
                     bool removed = _cache.Remove(session);
                     Debug.Assert(removed, "session not in pool?");
-                    _cachedCount = _cache.Count;
-                    session.Dispose();
+                    disposeSession = true;
                 }
 
                 session.RemoveOwner();
             }
-        }
 
-
-        internal int ActiveSessionsCount
-        {
-            get
+            if (disposeSession)
             {
-                return _cachedCount - _freeStateObjectCount;
+                _parser.Connection._parserLock.Wait(canReleaseFromAnyThread: false);
+                try
+                {
+                    session.Dispose();
+                }
+                finally
+                {
+                    _parser.Connection._parserLock.Release();
+                }
             }
         }
+
+        internal int ActiveSessionsCount => _cache.Count - _freeStateObjectCount;
     }
 }
 

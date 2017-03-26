@@ -12,7 +12,7 @@ namespace System.Data.SqlClient.SNI
         internal const string DefaultPipePath = @"sql\query"; // e.g. \\HOSTNAME\pipe\sql\query
         private const int MAX_PIPE_INSTANCES = 255;
 
-        private NamedPipeClientStream _pipeStream;
+        private readonly NamedPipeClientStream _pipeStream;
 
         protected override SNIProviders ProviderNumber => SNIProviders.NP_PROV;
 
@@ -69,11 +69,7 @@ namespace System.Data.SqlClient.SNI
 
         protected override void InternalDispose()
         {
-            if (_pipeStream != null)
-            {
-                _pipeStream.Dispose();
-                _pipeStream = null;
-            }
+            _pipeStream.Dispose();
         }
 
         /// <summary>

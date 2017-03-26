@@ -208,6 +208,12 @@ namespace System.Data.SqlClient.SNI
             }
         }
 
+        protected override void InternalDispose()
+        {
+            _tcpStream.Dispose();
+            _socket.Dispose();
+        }
+
         /// <summary>
         /// Test handle for killing underlying connection
         /// </summary>

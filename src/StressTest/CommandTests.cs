@@ -116,6 +116,7 @@ namespace StressTest
                 ex.Message.EndsWith("(provider: TCP Provider, error: 2 - Connection was terminated)", StringComparison.Ordinal) ||
                 (ex.Message == "The connection is broken and recovery is not possible.  The connection is marked by the client driver as unrecoverable.  No attempt was made to restore the connection") ||
                 ex.Message.EndsWith("(provider: Named Pipes Provider, error: 0 - Cannot access a closed pipe.)", StringComparison.Ordinal) ||
+                ex.Message.EndsWith("(provider: TCP Provider, error: 0 - Cannot access a disposed object.\r\nObject name: 'System.Net.Sockets.NetworkStream'.)", StringComparison.Ordinal) ||
                 ((connectionManager.IsMarsEnabled) &&
                     ((ex.Message == "The connection is broken and recovery is not possible.  The connection is marked by the client driver as unrecoverable.  No attempt was made to restore the connection.") ||
                     ex.Message.EndsWith("(provider: Named Pipes Provider, error: 0 - Pipe is broken.)", StringComparison.Ordinal)))))

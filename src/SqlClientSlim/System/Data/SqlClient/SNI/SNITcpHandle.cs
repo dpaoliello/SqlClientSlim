@@ -219,7 +219,14 @@ namespace System.Data.SqlClient.SNI
         /// </summary>
         public sealed override void KillConnection()
         {
-            _socket.Shutdown(SocketShutdown.Both);
+            try
+            {
+                _socket.Shutdown(SocketShutdown.Both);
+            }
+            catch (ObjectDisposedException)
+            {
+                // Connection has already been closed
+            }
         }
     }
 }

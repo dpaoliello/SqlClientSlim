@@ -12,6 +12,10 @@
     <GenerateAssemblyConfigurationAttribute>false</GenerateAssemblyConfigurationAttribute>
     <GenerateAssemblyCompanyAttribute>false</GenerateAssemblyCompanyAttribute>
     <GenerateAssemblyProductAttribute>false</GenerateAssemblyProductAttribute>
+    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+    <Authors>Daniel Paoliello</Authors>
+    <Description>A slimmed down, cloud optimized version of System.Data.SqlClient that focuses on performance and size over backwards compatibility.</Description>
+    <PackageTags>sql, sqlclient, cloud</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>

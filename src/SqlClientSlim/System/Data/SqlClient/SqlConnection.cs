@@ -803,27 +803,9 @@ namespace System.Data.SqlClient
             {
                 statistics = SqlStatistics.StartTimer(Statistics);
 
-                TaskCompletionSource<DbConnectionInternal> completion = new TaskCompletionSource<DbConnectionInternal>();
-                TaskCompletionSource<object> result = new TaskCompletionSource<object>();
-
-                if (s_diagnosticListener.IsEnabled(SqlClientDiagnosticListenerExtensions.SqlAfterOpenConnection) ||
-                    s_diagnosticListener.IsEnabled(SqlClientDiagnosticListenerExtensions.SqlErrorOpenConnection))
-                { 
-                    result.Task.ContinueWith((t) =>
-                    {
-                        if (t.Exception != null)
-                        {
-                            s_diagnosticListener.WriteConnectionOpenError(operationId, this, t.Exception);
-                        }
-                        else
-                        { 
-                            s_diagnosticListener.WriteConnectionOpenAfter(operationId, this);
-                        }
-                    }, TaskScheduler.Default);
-                }
-
                 if (cancellationToken.IsCancellationRequested)
                 {
+                    s_diagnosticListener.WriteConnectionOpenAfter(operationId, this);
                     return Task.FromCanceled(cancellationToken);
                 }
 
@@ -849,10 +831,28 @@ namespace System.Data.SqlClient
                     OpenAsyncRetry retry = new OpenAsyncRetry(this, registration);
                     var openTask = completion.Task.ContinueWith(retry.Retry, TaskScheduler.Default).Unwrap();
                     _currentCompletion = Tuple.Create(completion, openTask);
+
+                    if (s_diagnosticListener.IsEnabled(SqlClientDiagnosticListenerExtensions.SqlAfterOpenConnection) ||
+                        s_diagnosticListener.IsEnabled(SqlClientDiagnosticListenerExtensions.SqlErrorOpenConnection))
+                    {
+                        return openTask.ContinueWith((t) =>
+                        {
+                            if (t.Exception != null)
+                            {
+                                s_diagnosticListener.WriteConnectionOpenError(operationId, this, t.Exception);
+                            }
+                            else
+                            {
+                                s_diagnosticListener.WriteConnectionOpenAfter(operationId, this);
+                            }
+                        }, TaskScheduler.Default);
+                    }
+
                     return openTask;
                 }
                 else
                 {
+                    s_diagnosticListener.WriteConnectionOpenAfter(operationId, this);
                     return Task.CompletedTask;
                 }
             }
@@ -885,9 +885,14 @@ namespace System.Data.SqlClient
                 if (retryTask.IsFaulted || retryTask.IsCanceled)
                 {
                     _parent.CloseInnerConnection();
-                    _parent._currentCompletion = null;
-                    _result.SetException(e);
                 }
+                else
+                {
+                    s_connectionFactory.SetInnerConnectionEvent(_parent, retryTask.Result);
+                    _parent.FinishOpen();
+                }
+
+                return retryTask;
             }
         }
 
@@ -903,11 +908,8 @@ namespace System.Data.SqlClient
                 }
                 else
                 {
-                    s_connectionFactory.SetInnerConnectionEvent(_parent, retryTask.Result);
-                    _parent.FinishOpen();
+                    _statistics.ContinueOnNewConnection();
                 }
-
-                return retryTask;
             }
         }
 

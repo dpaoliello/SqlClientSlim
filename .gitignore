@@ -19,3 +19,4 @@ project.lock.json
 # Visual Studio profiling files
 *.vspx
 *.vsp
+*.user

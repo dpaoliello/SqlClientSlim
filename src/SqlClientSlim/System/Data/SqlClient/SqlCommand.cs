@@ -21,6 +21,14 @@ namespace System.Data.SqlClient
         private CommandType _commandType;
         private int _commandTimeout = ADP.DefaultCommandTimeout;
 
+        private readonly static DiagnosticListener _diagnosticListener = new DiagnosticListener(SqlClientDiagnosticListenerExtensions.DiagnosticListenerName);
+        private bool _parentOperationStarted = false;
+
+        // Prepare
+        // Against 7.0 Serve a prepare/unprepare requires an extra roundtrip to the server.
+        //
+        // From 8.0 and above  the preparation can be done as part of the command execution.
+
         private enum EXECTYPE
         {
             UNPREPARED,         // execute unprepared commands, all server versions (results in sp_execsql call)
@@ -265,7 +273,8 @@ namespace System.Data.SqlClient
             {
                 if (null != _activeConnection)
                 {
-                    if (_activeConnection.StatisticsEnabled)
+                    if (_activeConnection.StatisticsEnabled || 
+                        _diagnosticListener.IsEnabled(SqlClientDiagnosticListenerExtensions.SqlAfterExecuteCommand))
                     {
                         return _activeConnection.Statistics;
                     }
@@ -699,9 +708,11 @@ namespace System.Data.SqlClient
             // between entry into Execute* API and the thread obtaining the stateObject.
             _pendingCancel = false;
 
+            Guid operationId = _diagnosticListener.WriteCommandBefore(this);
+
             SqlStatistics statistics = null;
-
-
+            
+            Exception e = null;
             try
             {
                 statistics = SqlStatistics.StartTimer(Statistics);
@@ -709,9 +720,23 @@ namespace System.Data.SqlClient
                 ds = RunExecuteReader(0, RunBehavior.ReturnImmediately, returnStream: true);
                 return CompleteExecuteScalar(ds, false);
             }
+            catch (Exception ex)
+            {
+                e = ex;
+                throw;
+            }
             finally
             {
                 SqlStatistics.StopTimer(statistics);
+
+                if (e != null)
+                {
+                    _diagnosticListener.WriteCommandError(operationId, this, e);
+                }
+                else
+                {
+                    _diagnosticListener.WriteCommandAfter(operationId, this);
+                }
             }
         }
 
@@ -751,16 +776,34 @@ namespace System.Data.SqlClient
             // between entry into Execute* API and the thread obtaining the stateObject.
             _pendingCancel = false;
 
+            Guid operationId = _diagnosticListener.WriteCommandBefore(this);
+
             SqlStatistics statistics = null;
+            
+            Exception e = null;
             try
             {
                 statistics = SqlStatistics.StartTimer(Statistics);
                 InternalExecuteNonQuery(completion: null, sendToPipe: false, timeout: CommandTimeout);
                 return _rowsAffected;
             }
+            catch (Exception ex)
+            {
+                e = ex;
+                throw;
+            }
             finally
             {
                 SqlStatistics.StopTimer(statistics);
+                
+                if (e != null)
+                {
+                    _diagnosticListener.WriteCommandError(operationId, this, e);
+                }
+                else
+                {
+                    _diagnosticListener.WriteCommandAfter(operationId, this);
+                }
             }
         }
 
@@ -1052,7 +1095,11 @@ namespace System.Data.SqlClient
             // between entry into Execute* API and the thread obtaining the stateObject.
             _pendingCancel = false;
 
+            Guid operationId = _diagnosticListener.WriteCommandBefore(this);
+
             SqlStatistics statistics = null;
+            
+            Exception e = null;
             try
             {
                 statistics = SqlStatistics.StartTimer(Statistics);
@@ -1062,9 +1109,23 @@ namespace System.Data.SqlClient
                 ds = RunExecuteReader(CommandBehavior.SequentialAccess, RunBehavior.ReturnImmediately, returnStream: true);
                 return CompleteXmlReader(ds);
             }
+            catch (Exception ex)
+            {
+                e = ex;
+                throw;
+            }
             finally
             {
                 SqlStatistics.StopTimer(statistics);
+                
+                if (e != null)
+                {
+                    _diagnosticListener.WriteCommandError(operationId, this, e);
+                }
+                else
+                {
+                    _diagnosticListener.WriteCommandAfter(operationId, this);
+                }
             }
         }
 
@@ -1247,16 +1308,33 @@ namespace System.Data.SqlClient
             // between entry into Execute* API and the thread obtaining the stateObject.
             _pendingCancel = false;
 
-            SqlStatistics statistics = null;
+            Guid operationId = _diagnosticListener.WriteCommandBefore(this);
 
+            SqlStatistics statistics = null;
+            
+            Exception e = null;
             try
             {
                 statistics = SqlStatistics.StartTimer(Statistics);
                 return RunExecuteReader(behavior, RunBehavior.ReturnImmediately, returnStream: true);
             }
+            catch (Exception ex)
+            {
+                e = ex;
+                throw;
+            }
             finally
             {
                 SqlStatistics.StopTimer(statistics);
+                
+                if (e != null)
+                {
+                    _diagnosticListener.WriteCommandError(operationId, this, e);
+                }
+                else
+                {
+                    _diagnosticListener.WriteCommandAfter(operationId, this);
+                }
             }
         }
 
@@ -1399,6 +1477,8 @@ namespace System.Data.SqlClient
 
         public override Task<int> ExecuteNonQueryAsync(CancellationToken cancellationToken)
         {
+            Guid operationId = _diagnosticListener.WriteCommandBefore(this);
+
             TaskCompletionSource<int> source = new TaskCompletionSource<int>();
 
             CancellationTokenRegistration registration = new CancellationTokenRegistration();
@@ -1409,7 +1489,7 @@ namespace System.Data.SqlClient
                     source.SetCanceled();
                     return source.Task;
                 }
-                registration = cancellationToken.Register(CancelIgnoreFailure);
+                registration = cancellationToken.Register(s => ((SqlCommand)s).CancelIgnoreFailure(), this);
             }
 
             Task<int> returnedTask = source.Task;
@@ -1423,6 +1503,7 @@ namespace System.Data.SqlClient
                     if (t.IsFaulted)
                     {
                         Exception e = t.Exception.InnerException;
+                        _diagnosticListener.WriteCommandError(operationId, this, e);
                         source.SetException(e);
                     }
                     else
@@ -1435,11 +1516,13 @@ namespace System.Data.SqlClient
                         {
                             source.SetResult(t.Result);
                         }
+                        _diagnosticListener.WriteCommandAfter(operationId, this);
                     }
                 }, TaskScheduler.Default);
             }
             catch (Exception e)
             {
+                _diagnosticListener.WriteCommandError(operationId, this, e);
                 source.SetException(e);
             }
 
@@ -1475,6 +1558,10 @@ namespace System.Data.SqlClient
 
         new public Task<SqlDataReader> ExecuteReaderAsync(CommandBehavior behavior, CancellationToken cancellationToken)
         {
+            Guid operationId;
+            if (!_parentOperationStarted)
+                operationId = _diagnosticListener.WriteCommandBefore(this);
+
             TaskCompletionSource<SqlDataReader> source = new TaskCompletionSource<SqlDataReader>();
 
             CancellationTokenRegistration registration = new CancellationTokenRegistration();
@@ -1485,7 +1572,7 @@ namespace System.Data.SqlClient
                     source.SetCanceled();
                     return source.Task;
                 }
-                registration = cancellationToken.Register(CancelIgnoreFailure);
+                registration = cancellationToken.Register(s => ((SqlCommand)s).CancelIgnoreFailure(), this);
             }
 
             Task<SqlDataReader> returnedTask = source.Task;
@@ -1499,6 +1586,8 @@ namespace System.Data.SqlClient
                     if (t.IsFaulted)
                     {
                         Exception e = t.Exception.InnerException;
+                        if (!_parentOperationStarted)
+                            _diagnosticListener.WriteCommandError(operationId, this, e);
                         source.SetException(e);
                     }
                     else
@@ -1511,11 +1600,16 @@ namespace System.Data.SqlClient
                         {
                             source.SetResult(t.Result);
                         }
+                        if (!_parentOperationStarted)
+                            _diagnosticListener.WriteCommandAfter(operationId, this);
                     }
                 }, TaskScheduler.Default);
             }
             catch (Exception e)
             {
+                if (!_parentOperationStarted)
+                    _diagnosticListener.WriteCommandError(operationId, this, e);
+
                 source.SetException(e);
             }
 
@@ -1524,6 +1618,9 @@ namespace System.Data.SqlClient
 
         public override Task<object> ExecuteScalarAsync(CancellationToken cancellationToken)
         {
+            _parentOperationStarted = true;
+            Guid operationId = _diagnosticListener.WriteCommandBefore(this);
+
             return ExecuteReaderAsync(cancellationToken).ContinueWith((executeTask) =>
             {
                 TaskCompletionSource<object> source = new TaskCompletionSource<object>();
@@ -1533,6 +1630,7 @@ namespace System.Data.SqlClient
                 }
                 else if (executeTask.IsFaulted)
                 {
+                    _diagnosticListener.WriteCommandError(operationId, this, executeTask.Exception.InnerException);
                     source.SetException(executeTask.Exception.InnerException);
                 }
                 else
@@ -1550,6 +1648,7 @@ namespace System.Data.SqlClient
                             else if (readTask.IsFaulted)
                             {
                                 reader.Dispose();
+                                _diagnosticListener.WriteCommandError(operationId, this, readTask.Exception.InnerException);
                                 source.SetException(readTask.Exception.InnerException);
                             }
                             else
@@ -1577,10 +1676,12 @@ namespace System.Data.SqlClient
                                 }
                                 if (exception != null)
                                 {
+                                    _diagnosticListener.WriteCommandError(operationId, this, exception);
                                     source.SetException(exception);
                                 }
                                 else
                                 {
+                                    _diagnosticListener.WriteCommandAfter(operationId, this);
                                     source.SetResult(result);
                                 }
                             }
@@ -1592,6 +1693,7 @@ namespace System.Data.SqlClient
                         }
                     }, TaskScheduler.Default);
                 }
+                _parentOperationStarted = false;
                 return source.Task;
             }, TaskScheduler.Default).Unwrap();
         }
@@ -1603,6 +1705,8 @@ namespace System.Data.SqlClient
 
         public Task<XmlReader> ExecuteXmlReaderAsync(CancellationToken cancellationToken)
         {
+            Guid operationId = _diagnosticListener.WriteCommandBefore(this);
+
             TaskCompletionSource<XmlReader> source = new TaskCompletionSource<XmlReader>();
 
             CancellationTokenRegistration registration = new CancellationTokenRegistration();
@@ -1613,7 +1717,7 @@ namespace System.Data.SqlClient
                     source.SetCanceled();
                     return source.Task;
                 }
-                registration = cancellationToken.Register(CancelIgnoreFailure);
+                registration = cancellationToken.Register(s => ((SqlCommand)s).CancelIgnoreFailure(), this);
             }
 
             Task<XmlReader> returnedTask = source.Task;
@@ -1627,6 +1731,7 @@ namespace System.Data.SqlClient
                     if (t.IsFaulted)
                     {
                         Exception e = t.Exception.InnerException;
+                        _diagnosticListener.WriteCommandError(operationId, this, e);
                         source.SetException(e);
                     }
                     else
@@ -1639,11 +1744,13 @@ namespace System.Data.SqlClient
                         {
                             source.SetResult(t.Result);
                         }
+                        _diagnosticListener.WriteCommandAfter(operationId, this);
                     }
                 }, TaskScheduler.Default);
             }
             catch (Exception e)
             {
+                _diagnosticListener.WriteCommandError(operationId, this, e);
                 source.SetException(e);
             }
 

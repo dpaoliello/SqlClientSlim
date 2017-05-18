@@ -1,9 +1,14 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
-VisualStudioVersion = 15.0.26228.4
+VisualStudioVersion = 15.0.26403.7
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{AE1DE75F-7A85-488C-A5E4-F735001CEAA5}"
+	ProjectSection(SolutionItems) = preProject
+		..\docs\breaking.md = ..\docs\breaking.md
+		..\docs\issues.md = ..\docs\issues.md
+		..\docs\releasenotes.md = ..\docs\releasenotes.md
+	EndProjectSection
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SqlClientSlim", "SqlClientSlim\SqlClientSlim.csproj", "{C461780C-6EA7-415A-868C-858AAA137B1C}"
 EndProject

@@ -14,7 +14,15 @@
     <GenerateAssemblyProductAttribute>false</GenerateAssemblyProductAttribute>
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
     <Authors>Daniel Paoliello</Authors>
-    <Description>A slimmed down, cloud optimized version of System.Data.SqlClient that focuses on performance and size over backwards compatibility.</Description>
+    <Description>A slimmed down, cloud optimized version of System.Data.SqlClient that focuses on performance and size over backwards compatibility.
+
+Commonly Used Types:
+* System.Data.SqlClient.SqlConnection
+* System.Data.SqlClient.SqlException
+* System.Data.SqlClient.SqlParameter
+* System.Data.SqlClient.SqlDataReader
+* System.Data.SqlClient.SqlCommand
+* System.Data.SqlClient.SqlTransaction</Description>
     <PackageTags>sql, sqlclient, cloud</PackageTags>
     <PackageProjectUrl>https://github.com/dpaoliello/SqlClientSlim</PackageProjectUrl>
     <RepositoryUrl>https://github.com/dpaoliello/SqlClientSlim.git</RepositoryUrl>

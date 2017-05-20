@@ -9,6 +9,7 @@ using Xunit;
 
 namespace System.Data.SqlClient.Tests
 {
+    [Trait("connection", "none")]
     public class SqlBulkCopyColumnMappingCollectionTest
     {
         private static SqlBulkCopyColumnMappingCollection CreateCollection() => new SqlBulkCopy(new SqlConnection()).ColumnMappings;

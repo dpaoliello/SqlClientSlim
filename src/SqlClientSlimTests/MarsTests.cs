@@ -9,6 +9,7 @@ namespace System.Data.SqlClient.Tests
         /// Verifies that using MARS over TCP works correctly.
         /// </summary>
         [Fact]
+        [Trait("connection", "tcp")]
         public async Task MarsOverTcpSingleCommand()
         {
             using (var connection = new SqlConnection(Utilities.SqlAuthConnectionString + Utilities.MarsFragment + Utilities.NonPooledFragment))
@@ -24,6 +25,7 @@ namespace System.Data.SqlClient.Tests
         /// Verifies that using MARS over TCP works correctly.
         /// </summary>
         [Fact]
+        [Trait("connection", "np")]
         public async Task MarsOverNpSingleCommand()
         {
             using (var connection = new SqlConnection(Utilities.SqlAuthNamesPipesConnectionString + Utilities.MarsFragment + Utilities.NonPooledFragment))
@@ -39,6 +41,7 @@ namespace System.Data.SqlClient.Tests
         /// Verifies that MARS connections can have multiple readers active at once.
         /// </summary>
         [Fact]
+        [Trait("connection", "tcp")]
         public async Task MarsMultiCommand()
         {
             using (var connection = new SqlConnection(Utilities.SqlAuthConnectionString + Utilities.MarsFragment))
@@ -71,6 +74,7 @@ namespace System.Data.SqlClient.Tests
         /// Verifies that closing a MARS connection will close any still-open readers.
         /// </summary>
         [Fact]
+        [Trait("connection", "tcp")]
         public async Task MarsLeakedReader()
         {
             const string connectionString = Utilities.SqlAuthConnectionString + Utilities.MarsFragment + Utilities.MaxPoolOf1Fragment;

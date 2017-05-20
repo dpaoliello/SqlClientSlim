@@ -8,6 +8,7 @@ using Xunit;
 
 namespace System.Data.SqlClient.Tests
 {
+    [Trait("connection", "none")]
     public class SqlErrorCollectionTest
     {
         private const string badServer = "92B96911A0BD43E8ADA4451031F7E7CF";

@@ -6,6 +6,7 @@ namespace System.Data.SqlClient.Tests
     /// <summary>
     /// Tests for SqlCommand.
     /// </summary>
+    [Trait("connection", "tcp")]
     public sealed class SqlCommandTests
     {
         /// <summary>

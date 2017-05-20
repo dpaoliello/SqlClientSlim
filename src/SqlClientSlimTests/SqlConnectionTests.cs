@@ -10,6 +10,7 @@ namespace System.Data.SqlClient.Tests
         /// Verifies that connecting using SQL auth works
         /// </summary>
         [Fact]
+        [Trait("connection", "tcp")]
         public async Task SqlAuthConnectionTest()
         {
             using (var connection = new SqlConnection(Utilities.SqlAuthConnectionString))
@@ -22,6 +23,7 @@ namespace System.Data.SqlClient.Tests
         /// Verifies that connecting using SQL auth works with Named Pipes
         /// </summary>
         [Fact]
+        [Trait("connection", "np")]
         public async Task SqlAuthWithNamedPipesConnectionTest()
         {
             using (var connection = new SqlConnection(Utilities.SqlAuthNamesPipesConnectionString))
@@ -35,6 +37,7 @@ namespace System.Data.SqlClient.Tests
         /// Verifies that connecting using integrated auth works
         /// </summary>
         [Fact]
+        [Trait("connection", "tcp")]
         public async Task IntegratedAuthConnectionTest()
         {
             using (var connection = new SqlConnection(Utilities.IntegratedAuthConnectionString))
@@ -47,6 +50,7 @@ namespace System.Data.SqlClient.Tests
         /// Verifies that the same connect is returned every time if pooling is enabled
         /// </summary>
         [Fact]
+        [Trait("connection", "tcp")]
         public async Task ConnectionPoolTest()
         {
             Guid connectionId = Guid.Empty;
@@ -79,6 +83,7 @@ namespace System.Data.SqlClient.Tests
         /// Verifies that a different connection is returned every time if pooling is disabled
         /// </summary>
         [Fact]
+        [Trait("connection", "tcp")]
         public async Task NonConnectionPoolTest()
         {
             const int iterations = 10;
@@ -100,6 +105,7 @@ namespace System.Data.SqlClient.Tests
         /// Verifies that min pool size connection string keyword works
         /// </summary>
         [Fact]
+        [Trait("connection", "tcp")]
         public async Task MinPoolSizeTest()
         {
             using (var connection = new SqlConnection(Utilities.SqlAuthConnectionString + "min pool size = 2"))
@@ -113,6 +119,7 @@ namespace System.Data.SqlClient.Tests
         /// Verifies that if OpenAsync does not complete immediately, it returns a pending task until it can complete
         /// </summary>
         [Fact]
+        [Trait("connection", "tcp")]
         public async Task PendingOpenAsyncTest()
         {
             const string connectionString = Utilities.SqlAuthConnectionString + "max pool size = 1";
@@ -139,6 +146,7 @@ namespace System.Data.SqlClient.Tests
         /// Verifies that attempting to connect with bad credentials throws
         /// </summary>
         [Fact]
+        [Trait("connection", "tcp")]
         public async Task BadCredentialsTest()
         {
             const string badCredentialConnectionString = Utilities.ServerOnlyConnectionString + "user id=notauser;password=badpassword;";
@@ -153,6 +161,7 @@ namespace System.Data.SqlClient.Tests
         /// Verifies that connections are checked/"repaired" when the connection is pulled out of the pool
         /// </summary>
         [Fact]
+        [Trait("connection", "tcp")]
         public async Task RepairConnectionInPoolTest()
         {
             using (var connection = new SqlConnection(Utilities.SqlAuthConnectionString))
@@ -174,6 +183,7 @@ namespace System.Data.SqlClient.Tests
         /// Verifies that connections are checked/"repaired" when a command is executed
         /// </summary>
         [Fact]
+        [Trait("connection", "tcp")]
         public async Task RepairConnectionBeforeExecuteTest()
         {
             using (var connection = new SqlConnection(Utilities.SqlAuthConnectionString))

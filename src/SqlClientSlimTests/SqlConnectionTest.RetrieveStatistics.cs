@@ -9,6 +9,7 @@ using Xunit;
 
 namespace System.Data.SqlClient.Tests
 {
+    [Trait("connection", "none")]
     public partial class SqlConnectionTest
     {
         private static readonly string[] s_retrieveStatisticsKeys =

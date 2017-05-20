@@ -5,6 +5,7 @@ using Xunit;
 
 namespace System.Data.SqlClient.Tests
 {
+    [Trait("connection", "tcp")]
     public sealed class SqlDataReaderTests
     {
         /// <summary>

@@ -8,6 +8,7 @@ using Xunit;
 
 namespace System.Data.SqlClient.Tests
 {
+    [Trait("connection", "none")]
     public class ExceptionTest
     {
         // test connection string

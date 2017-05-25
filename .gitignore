@@ -20,3 +20,6 @@ project.lock.json
 *.vspx
 *.vsp
 *.user
+
+# Devs can hardcode passwords in their test file without sharing with the rest of the world
+/RunTests.cmd

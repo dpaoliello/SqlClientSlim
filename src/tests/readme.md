@@ -18,7 +18,21 @@ dotnet test src\tests\FunctionalTests\System.Data.SqlClient.Tests.csproj
 popd
 ```
 
-## Running the non-connectivity tests without a SQL Server
+### Running the tests against SQL Server in a container
+Ensure that you have [Docker for Windows](https://docs.docker.com/docker-for-windows) installed and are [setup to use Windows
+containers](https://docs.docker.com/docker-for-windows/#switch-between-windows-and-linux-containers).
+
+To create the testing SQL Server container, run `tools\Start-TestServerContainer.ps1`
+
+To run the tests: `RunTestsInDocker.ps1`
+
+To stop and remove the testing SQL Server container, run `tools\Stop-TestServerContainer.ps1`
+
+The tests are non-destructive, so it is best to leave the testing SQL Server container running as it takes a while to start.
+
+Currently, Named Pipes are not supported in Windows containers, so these tests are skipped.
+
+### Running the non-connectivity tests without a SQL Server
 You can also run just the test that don't use a connection to SQL Server by filtering the "connection" trait to "none":
 
 ```
@@ -26,7 +40,7 @@ dotnet test src\tests\SqlClientSlimTests\SqlClientSlimTests.csproj --filter "con
 dotnet test src\tests\FunctionalTests\System.Data.SqlClient.Tests.csproj --filter "connection=none"
 ```
 
-## Testing against SQL Azure
+### Testing against SQL Azure
 Since SQL Azure doesn't support Named Pipes, add a filter to remove any "connection" trait of "np":
 
 ```

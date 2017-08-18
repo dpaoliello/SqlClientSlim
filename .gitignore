@@ -5,7 +5,6 @@ obj/
 # NuGet Packages
 packages/
 dotnetcli/
-tools/
 *.nupkg
 
 # Visual Studio temp files
@@ -23,3 +22,6 @@ project.lock.json
 
 # Devs can hardcode passwords in their test file without sharing with the rest of the world
 /RunTests.cmd
+
+# Temporary folder used to store testing collateral
+/Temp/

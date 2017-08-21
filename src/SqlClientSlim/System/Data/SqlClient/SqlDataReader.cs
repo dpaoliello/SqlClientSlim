@@ -3710,7 +3710,7 @@ namespace System.Data.SqlClient
 
                 try
                 {
-                    return GetBytesAsyncReadDataStage(i, buffer, index, length, timeout, false, false, cancellationToken, CancellationToken.None, out bytesRead);
+                    return GetBytesAsyncReadDataStage(i, buffer, index, length, timeout, /* isContinuation*/false, cancellationToken, CancellationToken.None, out bytesRead);
                 }
                 catch
                 {
@@ -3757,7 +3757,7 @@ namespace System.Data.SqlClient
                     // Up to the correct column - continue to read
                     reader.SwitchToAsyncWithoutSnapshot();
                     int totalBytesRead;
-                    var readTask = reader.GetBytesAsyncReadDataStage(i, buffer, index, length, timeout, true, false, cancellationToken, timeoutToken, out totalBytesRead);
+                    var readTask = reader.GetBytesAsyncReadDataStage(i, buffer, index, length, timeout, /* isContinuation*/true, cancellationToken, timeoutToken, out totalBytesRead);
                     if (readTask == null)
                     {
                         // Completed synchronously
@@ -3775,7 +3775,7 @@ namespace System.Data.SqlClient
             }
         }
 
-        private Task<int> GetBytesAsyncReadDataStage(int i, byte[] buffer, int index, int length, int timeout, bool isContinuation, bool forceSync, CancellationToken cancellationToken, CancellationToken timeoutToken, out int bytesRead)
+        private Task<int> GetBytesAsyncReadDataStage(int i, byte[] buffer, int index, int length, int timeout, bool isContinuation, CancellationToken cancellationToken, CancellationToken timeoutToken, out int bytesRead)
         {
             _lastColumnWithDataChunkRead = i;
             TaskCompletionSource<int> source = null;
@@ -3787,11 +3787,6 @@ namespace System.Data.SqlClient
             // Try to read without any continuations (all the data may already be in the stateObj's buffer)
             if (!TryGetBytesInternalSequential(i, buffer, index, length, out bytesRead))
             {
-                if (forceSync)
-                {
-                    return null;
-                }
-
                 // This will be the 'state' for the callback
                 int totalBytesRead = bytesRead;
 
@@ -3824,7 +3819,7 @@ namespace System.Data.SqlClient
                     }
                 }
 
-                Task<int> retryTask = ContinueRetryable(GetBytesAsyncReadDataStageContinuation, this, Tuple.Create(i, buffer, index, length, totalBytesRead, cancellationToken, timeoutToken));
+                Task<int> retryTask = ContinueRetryable(GetBytesAsyncReadDataStageContinuation, this, new GetBytesAsyncReadDataStageContinuationState(i, buffer, index, length, totalBytesRead, cancellationToken, timeoutToken));
                 if (isContinuation)
                 {
                     // Let the caller handle cleanup\completing
@@ -3838,7 +3833,7 @@ namespace System.Data.SqlClient
                 }
             }
 
-            if (!isContinuation && !forceSync)
+            if (!isContinuation)
             {
                 // If this is the first async op, we need to cleanup
                 CleanupAfterAsyncInvocation();
@@ -3853,25 +3848,40 @@ namespace System.Data.SqlClient
             state.Item1.CompleteRetryable(t, state.Item2, state.Item3);
         }
 
+        private sealed class GetBytesAsyncReadDataStageContinuationState
+        {
+            public readonly int ColumnIndex;
+            public readonly byte[] Buffer;
+            public readonly int Index;
+            public readonly int Length;
+            public int TotalBytesRead;
+            public readonly CancellationToken CancellationToken;
+            public readonly CancellationToken TimeoutToken;
+
+            public GetBytesAsyncReadDataStageContinuationState(int i, byte[] buffer, int index, int length, int totalBytesRead, CancellationToken cancellationToken, CancellationToken timeoutToken)
+            {
+                ColumnIndex = i;
+                Buffer = buffer;
+                Index = index;
+                Length = length;
+                TotalBytesRead = totalBytesRead;
+                CancellationToken = cancellationToken;
+                TimeoutToken = timeoutToken;
+            }
+        }
+
         private static Task<int> GetBytesAsyncReadDataStageContinuation(Task t, SqlDataReader reader, object rawState)
         {
-            var state = (Tuple<int, byte[], int, int, int, CancellationToken, CancellationToken>)rawState;
-            int i = state.Item1;
-            byte[] buffer = state.Item2;
-            int index = state.Item3;
-            int length = state.Item4;
-            int totalBytesRead = state.Item5;
-            CancellationToken cancellationToken = state.Item6;
-            CancellationToken timeoutToken = state.Item7;
+            var state = (GetBytesAsyncReadDataStageContinuationState)rawState;
 
             reader.PrepareForAsyncContinuation();
 
-            if (cancellationToken.IsCancellationRequested)
+            if (state.CancellationToken.IsCancellationRequested)
             {
                 // User requested cancellation
-                return Task.FromCanceled<int>(cancellationToken);
+                return Task.FromCanceled<int>(state.CancellationToken);
             }
-            else if (timeoutToken.IsCancellationRequested)
+            else if (state.TimeoutToken.IsCancellationRequested)
             {
                 // Timeout
                 return Task.FromException<int>(ADP.ExceptionWithStackTrace(ADP.IO(SQLMessage.Timeout())));
@@ -3882,17 +3892,17 @@ namespace System.Data.SqlClient
                 reader.SetTimeout(reader._defaultTimeoutMilliseconds);
 
                 int bytesReadThisIteration;
-                bool result = reader.TryGetBytesInternalSequential(i, buffer, index + totalBytesRead, length - totalBytesRead, out bytesReadThisIteration);
-                totalBytesRead += bytesReadThisIteration;
-                Debug.Assert(totalBytesRead <= length, "Read more bytes than required");
+                bool result = reader.TryGetBytesInternalSequential(state.ColumnIndex, state.Buffer, state.Index + state.TotalBytesRead, state.Length - state.TotalBytesRead, out bytesReadThisIteration);
+                state.TotalBytesRead += bytesReadThisIteration;
+                Debug.Assert(state.TotalBytesRead <= state.Length, "Read more bytes than required");
 
                 if (result)
                 {
-                    return Task.FromResult<int>(totalBytesRead);
+                    return Task.FromResult(state.TotalBytesRead);
                 }
                 else
                 {
-                    return reader.ContinueRetryable(GetBytesAsyncReadDataStageContinuation, reader, rawState);
+                    return reader.ContinueRetryable(GetBytesAsyncReadDataStageContinuation, reader, state);
                 }
             }
         }
@@ -4010,34 +4020,38 @@ namespace System.Data.SqlClient
 
             PrepareAsyncInvocation(useSnapshot: true);
 
-            return InvokeRetryable(ReadAsyncContinuation, source, registration, state: Tuple.Create(rowTokenRead, more));
+            return InvokeRetryable(ReadAsyncContinuation, source, registration, state: new ReadAsyncContinuationState { RowTokenRead = rowTokenRead, More = more });
+        }
+
+        private class ReadAsyncContinuationState
+        {
+            public bool RowTokenRead;
+            public bool More;
         }
 
         private static Task<bool> ReadAsyncContinuation(Task t, SqlDataReader reader, object rawState)
         {
-            var state = (Tuple<bool, bool>)rawState;
-            bool rowTokenRead = state.Item1;
-            bool more = state.Item2;
+            var state = (ReadAsyncContinuationState)rawState;
 
             if (t != null)
             {
                 reader.PrepareForAsyncContinuation();
             }
 
-            if (rowTokenRead || reader.TryReadInternal(true, out more))
+            if (state.RowTokenRead || reader.TryReadInternal(true, out state.More))
             {
                 // If there are no more rows, or this is Sequential Access, then we are done
-                if (!more || (reader._commandBehavior & CommandBehavior.SequentialAccess) == CommandBehavior.SequentialAccess)
+                if (!state.More || (reader._commandBehavior & CommandBehavior.SequentialAccess) == CommandBehavior.SequentialAccess)
                 {
                     // completed 
-                    return more ? ADP.TrueTask : ADP.FalseTask;
+                    return state.More ? ADP.TrueTask : ADP.FalseTask;
                 }
                 else
                 {
                     // First time reading the row token - update the snapshot
-                    if (!rowTokenRead)
+                    if (!state.RowTokenRead)
                     {
-                        rowTokenRead = true;
+                        state.RowTokenRead = true;
                         reader._snapshot = null;
                         reader.PrepareAsyncInvocation(useSnapshot: true);
                     }
@@ -4051,7 +4065,7 @@ namespace System.Data.SqlClient
                 }
             }
 
-            return reader.ContinueRetryable(ReadAsyncContinuation, reader, rawState);
+            return reader.ContinueRetryable(ReadAsyncContinuation, reader, state);
         }
 
         override public Task<bool> IsDBNullAsync(int i, CancellationToken cancellationToken)
@@ -4277,7 +4291,7 @@ namespace System.Data.SqlClient
             PrepareAsyncInvocation(useSnapshot: true);
 
             // Go!
-            return InvokeRetryable(GetFieldValueAsyncContinuation<T>, source, registration);
+            return InvokeRetryable(GetFieldValueAsyncContinuation<T>, source, registration, state: i);
         }
 
         private static Task<T> GetFieldValueAsyncContinuation<T>(Task t, SqlDataReader reader, object state)

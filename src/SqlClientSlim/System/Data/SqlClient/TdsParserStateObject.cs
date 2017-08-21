@@ -2043,6 +2043,7 @@ namespace System.Data.SqlClient
                 throw ADP.ClosedConnectionError();
             }
 
+            _snapshot?.AssertBufferNotInSnapshot(_inBuff);
             SNIPacket readPacket = new SNIPacket(_inBuff);
             SNIError error;
 
@@ -2259,6 +2260,7 @@ namespace System.Data.SqlClient
             }
 #endif
 
+            _snapshot?.AssertBufferNotInSnapshot(_inBuff);
             SNIPacket readPacket = new SNIPacket(_inBuff);
 
             try
@@ -3754,14 +3756,18 @@ namespace System.Data.SqlClient
                 }
             }
 
-            internal void PushBuffer(byte[] buffer, int read)
+            [Conditional("DEBUG")]
+            internal void AssertBufferNotInSnapshot(byte[] buffer)
             {
-#if DEBUG
                 foreach (var snapshot in _snapshotInBuffs)
                 {
-                    Debug.Assert(!object.ReferenceEquals(snapshot, buffer));
+                    Debug.Assert(!object.ReferenceEquals(snapshot.Buffer, buffer));
                 }
-#endif
+            }
+
+            internal void PushBuffer(byte[] buffer, int read)
+            {
+                AssertBufferNotInSnapshot(buffer);
 
                 PacketData packetData = new PacketData();
                 packetData.Buffer = buffer;

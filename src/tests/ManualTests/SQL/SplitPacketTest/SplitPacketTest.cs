@@ -11,6 +11,7 @@ using Xunit;
 
 namespace System.Data.SqlClient.ManualTesting.Tests
 {
+    [Trait("connection", "tcp")]
     public class SplitPacketTest
     {
         private int Port = -1;

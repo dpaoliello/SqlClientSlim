@@ -11,6 +11,7 @@ using Xunit;
 
 namespace System.Data.SqlClient.ManualTesting.Tests
 {
+    [Trait("connection", "tcp")]
     public class RandomStressTest
     {
         private static readonly TimeSpan TimeLimitDefault = new TimeSpan(0, 0, 10);

@@ -10,6 +10,7 @@ using Xunit;
 
 namespace System.Data.SqlClient.ManualTesting.Tests
 {
+    [Trait("connection", "none")]
     public static class SqlTypeTest
     {
         private static readonly string[] s_sampleString = new string[] { "In", "its", "first", "month", "on",  "the",  "market,",
@@ -74,7 +75,7 @@ namespace System.Data.SqlClient.ManualTesting.Tests
             0x0409   // English - United States
         };
 
-        [CheckConnStrSetupFact]
+        [Fact]
         public static void SqlStringValidComparisonTest()
         {
             for (int j = 0; j < s_cultureInfo.Length; ++j)
@@ -88,7 +89,7 @@ namespace System.Data.SqlClient.ManualTesting.Tests
             }
         }
 
-        [CheckConnStrSetupFact]
+        [Fact]
         public static void SqlStringNullComparisonTest()
         {
             SqlString nullSqlString = new SqlString(null);

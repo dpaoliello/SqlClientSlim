@@ -9,6 +9,7 @@ using Xunit;
 
 namespace System.Data.SqlClient.ManualTesting.Tests
 {
+    [Trait("connection", "tcp")]
     public static class ConnectionPoolTest
     {
         private static readonly string _tcpConnStr = (new SqlConnectionStringBuilder(DataTestUtility.TcpConnStr) { MultipleActiveResultSets = false }).ConnectionString;

@@ -16,6 +16,7 @@ namespace System.Data.SqlClient.ManualTesting.Tests
     public static class DataStreamTest
     {
         [CheckConnStrSetupFact]
+        [Trait("connection", "np")]
         public static void RunAllTestsForSingleServer_NP()
         {
             if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
@@ -29,6 +30,7 @@ namespace System.Data.SqlClient.ManualTesting.Tests
         }
 
         [CheckConnStrSetupFact]
+        [Trait("connection", "tcp")]
         public static void RunAllTestsForSingleServer_TCP()
         {
             RunAllTestsForSingleServer(DataTestUtility.TcpConnStr);
@@ -36,27 +38,27 @@ namespace System.Data.SqlClient.ManualTesting.Tests
 
         private static void RunAllTestsForSingleServer(string connectionString, bool usingNamePipes = false)
         {
-            RowBuffer(connectionString);
-            InvalidRead(connectionString);
-            VariantRead(connectionString);
-            TypeRead(connectionString);
-            SQLTypeRead(connectionString);
-            GetValueOfTRead(connectionString);
-            MultipleResults(connectionString);
-            NumericRead(connectionString);
-            TimestampRead(connectionString);
-            OrphanReader(connectionString);
-            BufferSize(connectionString);
-            ExecuteXmlReaderTest(connectionString);
-            SequentialAccess(connectionString);
-            HasRowsTest(connectionString);
-            CloseConnection(connectionString);
-            OpenConnection(connectionString);
-            SqlCharsBytesTest(connectionString);
-            GetStream(connectionString);
-            GetTextReader(connectionString);
-            GetXmlReader(connectionString);
-            ReadStream(connectionString);
+            //RowBuffer(connectionString);
+            //InvalidRead(connectionString);
+            //VariantRead(connectionString);
+            //TypeRead(connectionString);
+            //SQLTypeRead(connectionString);
+            //GetValueOfTRead(connectionString);
+            //MultipleResults(connectionString);
+            //NumericRead(connectionString);
+            //TimestampRead(connectionString);
+            //OrphanReader(connectionString);
+            //BufferSize(connectionString);
+            //ExecuteXmlReaderTest(connectionString);
+            //SequentialAccess(connectionString);
+            //HasRowsTest(connectionString);
+            //CloseConnection(connectionString);
+            //OpenConnection(connectionString);
+            //SqlCharsBytesTest(connectionString);
+            //GetStream(connectionString);
+            //GetTextReader(connectionString);
+            //GetXmlReader(connectionString);
+            //ReadStream(connectionString);
             ReadTextReader(connectionString);
             StreamingBlobDataTypes(connectionString);
             OutOfOrderGetChars(connectionString);

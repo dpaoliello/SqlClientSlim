@@ -7,6 +7,7 @@ using Xunit;
 
 namespace System.Data.SqlClient.ManualTesting.Tests
 {
+    [Trait("connection", "tcp")]
     public static class WeakRefTest
     {
         private const string COMMAND_TEXT_1 = "SELECT au_id, au_lname, au_fname, phone, address, city, state, zip, contract from authors";

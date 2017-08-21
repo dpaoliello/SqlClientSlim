@@ -7,6 +7,7 @@ using Xunit;
 
 namespace System.Data.SqlClient.ManualTesting.Tests
 {
+    [Trait("connection", "tcp")]
     public static class DateTimeTest
     {
         [CheckConnStrSetupFact]

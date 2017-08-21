@@ -7,6 +7,7 @@ using Xunit;
 
 namespace System.Data.SqlClient.ManualTesting.Tests
 {
+    [Trait("connection", "tcp")]
     public static class CommandCancelTest
     {
         // Shrink the packet size - this should make timeouts more likely

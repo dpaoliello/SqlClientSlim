@@ -7,6 +7,7 @@ using Xunit;
 
 namespace System.Data.SqlClient.ManualTesting.Tests
 {
+    [Trait("connection", "tcp")]
     public static class MARSSessionPoolingTest
     {
         private const string COMMAND_STATUS = "select count(*) as ConnectionCount from sys.dm_exec_connections where session_id=@@spid and net_transport='Session'; select count(*) as ActiveRequestCount from sys.dm_exec_requests where session_id=@@spid and status='running' or session_id=@@spid and status='suspended'";

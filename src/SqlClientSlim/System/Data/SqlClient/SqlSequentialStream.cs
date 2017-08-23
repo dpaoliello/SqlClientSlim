@@ -13,9 +13,9 @@ namespace System.Data.SqlClient
     {
         private SqlDataReader _reader;  // The SqlDataReader that we are reading data from
         private int _columnIndex;       // The index of out column in the table
+        private Task _currentTask;      // Holds the current task being processed
         private int _readTimeout;       // Read timeout for this stream in ms (for Stream.ReadTimeout)
         private CancellationTokenSource _disposalTokenSource;    // Used to indicate that a cancellation is requested due to disposal
-        private Task<int> _lastResult;  // Cached task containing the last result to avoid allocations on the fast path
 
         internal SqlSequentialStream(SqlDataReader reader, int columnIndex)
         {
@@ -24,6 +24,7 @@ namespace System.Data.SqlClient
 
             _reader = reader;
             _columnIndex = columnIndex;
+            _currentTask = null;
             _disposalTokenSource = new CancellationTokenSource();
 
             // Safely convert the CommandTimeout from seconds to milliseconds
@@ -99,6 +100,10 @@ namespace System.Data.SqlClient
             {
                 throw ADP.ObjectDisposed(this);
             }
+            if (_currentTask != null)
+            {
+                throw ADP.AsyncOperationPending();
+            }
 
             try
             {
@@ -111,113 +116,118 @@ namespace System.Data.SqlClient
             }
         }
 
+
         public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
         {
             ValidateReadParameters(buffer, offset, count);
 
+            TaskCompletionSource<int> completion = new TaskCompletionSource<int>();
             if (!CanRead)
             {
-                return Task.FromException<int>(ADP.ExceptionWithStackTrace(ADP.ObjectDisposed(this)));
+                completion.SetException(ADP.ExceptionWithStackTrace(ADP.ObjectDisposed(this)));
             }
             else
             {
-                // Set up a combined cancellation token for both the user's and our disposal tokens
-                CancellationTokenSource combinedTokenSource;
-                if (!cancellationToken.CanBeCanceled)
+                try
                 {
-                    // Users token is not cancellable - just use ours
-                    combinedTokenSource = _disposalTokenSource;
-                }
-                else
-                {
-                    // Setup registrations from user and disposal token to cancel the combined token
-                    combinedTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _disposalTokenSource.Token);
-                }
-
-                int bytesRead = 0;
-                Task<int> getBytesTask = null;
-                var reader = _reader;
-                if ((reader != null) && (!cancellationToken.IsCancellationRequested) && (!_disposalTokenSource.Token.IsCancellationRequested))
-                {
-                    getBytesTask = reader.GetBytesAsync(_columnIndex, buffer, offset, count, _readTimeout, combinedTokenSource.Token, out bytesRead);
-                }
-
-                if (getBytesTask == null)
-                {
-                    Task<int> result;
-                    if (cancellationToken.IsCancellationRequested)
+                    Task original = Interlocked.CompareExchange<Task>(ref _currentTask, completion.Task, null);
+                    if (original != null)
                     {
-                        result = Task.FromCanceled<int>(cancellationToken);
-                    }
-                    else if (!CanRead)
-                    {
-                        result = Task.FromException<int>(ADP.ExceptionWithStackTrace(ADP.ObjectDisposed(this)));
+                        completion.SetException(ADP.ExceptionWithStackTrace(ADP.AsyncOperationPending()));
                     }
                     else
                     {
-                        if (_lastResult?.Result == bytesRead)
+                        // Set up a combined cancellation token for both the user's and our disposal tokens
+                        CancellationTokenSource combinedTokenSource;
+                        if (!cancellationToken.CanBeCanceled)
                         {
-                            return _lastResult;
+                            // Users token is not cancellable - just use ours
+                            combinedTokenSource = _disposalTokenSource;
                         }
                         else
                         {
-                            result = Task.FromResult(bytesRead);
-                            _lastResult = result;
+                            // Setup registrations from user and disposal token to cancel the combined token
+                            combinedTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _disposalTokenSource.Token);
+                        }
+
+                        int bytesRead = 0;
+                        Task<int> getBytesTask = null;
+                        var reader = _reader;
+                        if ((reader != null) && (!cancellationToken.IsCancellationRequested) && (!_disposalTokenSource.Token.IsCancellationRequested))
+                        {
+                            getBytesTask = reader.GetBytesAsync(_columnIndex, buffer, offset, count, _readTimeout, combinedTokenSource.Token, out bytesRead);
+                        }
+
+                        if (getBytesTask == null)
+                        {
+                            _currentTask = null;
+                            if (cancellationToken.IsCancellationRequested)
+                            {
+                                completion.SetCanceled();
+                            }
+                            else if (!CanRead)
+                            {
+                                completion.SetException(ADP.ExceptionWithStackTrace(ADP.ObjectDisposed(this)));
+                            }
+                            else
+                            {
+                                completion.SetResult(bytesRead);
+                            }
+
+                            if (combinedTokenSource != _disposalTokenSource)
+                            {
+                                combinedTokenSource.Dispose();
+                            }
+                        }
+                        else
+                        {
+                            getBytesTask.ContinueWith((t) =>
+                            {
+                                _currentTask = null;
+                                // If we completed, but _reader is null (i.e. the stream is closed), then report cancellation
+                                if ((t.Status == TaskStatus.RanToCompletion) && (CanRead))
+                                {
+                                    completion.SetResult((int)t.Result);
+                                }
+                                else if (t.Status == TaskStatus.Faulted)
+                                {
+                                    if (t.Exception.InnerException is SqlException)
+                                    {
+                                        // Stream.ReadAsync() can't throw a SqlException - so wrap it in an IOException
+                                        completion.SetException(ADP.ExceptionWithStackTrace(ADP.ErrorReadingFromStream(t.Exception.InnerException)));
+                                    }
+                                    else
+                                    {
+                                        completion.SetException(t.Exception.InnerException);
+                                    }
+                                }
+                                else if (!CanRead)
+                                {
+                                    completion.SetException(ADP.ExceptionWithStackTrace(ADP.ObjectDisposed(this)));
+                                }
+                                else
+                                {
+                                    completion.SetCanceled();
+                                }
+
+                                if (combinedTokenSource != _disposalTokenSource)
+                                {
+                                    combinedTokenSource.Dispose();
+                                }
+                            }, TaskScheduler.Default);
                         }
                     }
-
-                    if (combinedTokenSource != _disposalTokenSource)
-                    {
-                        combinedTokenSource.Dispose();
-                    }
-
-                    return result;
                 }
-                else
+                catch (Exception ex)
                 {
-                    TaskCompletionSource<int> completion = new TaskCompletionSource<int>();
-                    getBytesTask.ContinueWith(ReadAsyncContinuation, Tuple.Create(this, completion, combinedTokenSource), TaskScheduler.Default);
-                    return completion.Task;
+                    // In case of any errors, ensure that the completion is completed and the task is set back to null if we switched it
+                    completion.TrySetException(ex);
+                    Interlocked.CompareExchange(ref _currentTask, null, completion.Task);
+                    throw;
                 }
             }
-        }
 
-        private static void ReadAsyncContinuation(Task<int> t, object rawState)
-        {
-            var state = (Tuple<SqlSequentialStream, TaskCompletionSource<int>, CancellationTokenSource>)rawState;
-            SqlSequentialStream stream = state.Item1;
-            TaskCompletionSource<int> completion = state.Item2;
-
-            // If we completed, but _reader is null (i.e. the stream is closed), then report cancellation
-            if ((t.Status == TaskStatus.RanToCompletion) && stream.CanRead)
-            {
-                completion.SetResult((int)t.Result);
-            }
-            else if (t.Status == TaskStatus.Faulted)
-            {
-                if (t.Exception.InnerException is SqlException)
-                {
-                    // Stream.ReadAsync() can't throw a SqlException - so wrap it in an IOException
-                    completion.SetException(ADP.ExceptionWithStackTrace(ADP.ErrorReadingFromStream(t.Exception.InnerException)));
-                }
-                else
-                {
-                    completion.SetException(t.Exception.InnerException);
-                }
-            }
-            else if (!stream.CanRead)
-            {
-                completion.SetException(ADP.ExceptionWithStackTrace(ADP.ObjectDisposed(stream)));
-            }
-            else
-            {
-                completion.SetCanceled();
-            }
-
-            if (state.Item3 != stream._disposalTokenSource)
-            {
-                state.Item3.Dispose();
-            }
+            return completion.Task;
         }
 
         public override long Seek(long offset, IO.SeekOrigin origin)
@@ -243,6 +253,13 @@ namespace System.Data.SqlClient
         {
             _disposalTokenSource.Cancel();
             _reader = null;
+
+            // Wait for pending task
+            var currentTask = _currentTask;
+            if (currentTask != null)
+            {
+                ((IAsyncResult)currentTask).AsyncWaitHandle.WaitOne();
+            }
         }
 
         protected override void Dispose(bool disposing)

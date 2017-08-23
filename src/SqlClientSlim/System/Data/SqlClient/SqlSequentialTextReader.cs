@@ -18,7 +18,7 @@ namespace System.Data.SqlClient
         private Decoder _decoder;       // Decoder based on the encoding (NOTE: Decoders are stateful as they are designed to process streams of data)
         private byte[] _leftOverBytes;  // Bytes leftover from the last Read() operation - this can be null if there were no bytes leftover (Possible optimization: re-use the same array?)
         private int _peekedChar;        // The last character that we peeked at (or -1 if we haven't peeked at anything)
-        private Task<int> _lastResult;  // Cached task containing the last result to avoid allocations on the fast path
+        private Task _currentTask;      // The current async task
         private CancellationTokenSource _disposalTokenSource;    // Used to indicate that a cancellation is requested due to disposal
 
         internal SqlSequentialTextReader(SqlDataReader reader, int columnIndex, Encoding encoding)
@@ -33,6 +33,7 @@ namespace System.Data.SqlClient
             _decoder = encoding.GetDecoder();
             _leftOverBytes = null;
             _peekedChar = -1;
+            _currentTask = null;
             _disposalTokenSource = new CancellationTokenSource();
         }
 
@@ -43,6 +44,10 @@ namespace System.Data.SqlClient
 
         public override int Peek()
         {
+            if (_currentTask != null)
+            {
+                throw ADP.AsyncOperationPending();
+            }
             if (IsClosed)
             {
                 throw ADP.ObjectDisposed(this);
@@ -59,6 +64,10 @@ namespace System.Data.SqlClient
 
         public override int Read()
         {
+            if (_currentTask != null)
+            {
+                throw ADP.AsyncOperationPending();
+            }
             if (IsClosed)
             {
                 throw ADP.ObjectDisposed(this);
@@ -95,6 +104,10 @@ namespace System.Data.SqlClient
             {
                 throw ADP.ObjectDisposed(this);
             }
+            if (_currentTask != null)
+            {
+                throw ADP.AsyncOperationPending();
+            }
 
             int charsRead = 0;
             int charsNeeded = count;
@@ -117,129 +130,146 @@ namespace System.Data.SqlClient
         public override Task<int> ReadAsync(char[] buffer, int index, int count)
         {
             ValidateReadParameters(buffer, index, count);
+            TaskCompletionSource<int> completion = new TaskCompletionSource<int>();
 
             if (IsClosed)
             {
-                return Task.FromException<int>(ADP.ExceptionWithStackTrace(ADP.ObjectDisposed(this)));
+                completion.SetException(ADP.ExceptionWithStackTrace(ADP.ObjectDisposed(this)));
             }
             else
-            {
-                int charsRead = 0;
-                int adjustedIndex = index;
-                int charsNeeded = count;
-
-                // Load in peeked char
-                if ((HasPeekedChar) && (charsNeeded > 0))
-                {
-                    // Take a copy of _peekedChar in case it is cleared during close
-                    int peekedChar = _peekedChar;
-                    if (peekedChar >= char.MinValue)
-                    {
-                        Debug.Assert((_peekedChar >= char.MinValue) && (_peekedChar <= char.MaxValue), string.Format("Bad peeked character: {0}", _peekedChar));
-                        buffer[adjustedIndex] = (char)peekedChar;
-                        adjustedIndex++;
-                        charsRead++;
-                        charsNeeded--;
-                        _peekedChar = -1;
-                    }
-                }
-
-                int byteBufferUsed;
-                byte[] byteBuffer = PrepareByteBuffer(charsNeeded, out byteBufferUsed);
-
-                // Permit a 0 byte read in order to advance the reader to the correct column
-                if ((byteBufferUsed < byteBuffer.Length) || (byteBuffer.Length == 0))
-                {
-                    int bytesRead;
-                    var reader = _reader;
-                    if (reader != null)
-                    {
-                        Task<int> getBytesTask = reader.GetBytesAsync(_columnIndex, byteBuffer, byteBufferUsed, byteBuffer.Length - byteBufferUsed, Timeout.Infinite, _disposalTokenSource.Token, out bytesRead);
-                        if (getBytesTask == null)
-                        {
-                            byteBufferUsed += bytesRead;
-                        }
-                        else
-                        {
-                            // We need more data - setup the callback, and mark this as not completed sync
-                            TaskCompletionSource<int> completion = new TaskCompletionSource<int>();
-                            getBytesTask.ContinueWith(ReadAsyncContinuation, Tuple.Create(this, buffer, charsRead, adjustedIndex, charsNeeded, byteBufferUsed, byteBuffer, completion), TaskScheduler.Default);
-                            return completion.Task;
-                        }
-
-                        if (byteBufferUsed > 0)
-                        {
-                            // No more data needed, decode what we have
-                            charsRead += DecodeBytesToChars(byteBuffer, byteBufferUsed, buffer, adjustedIndex, charsNeeded);
-                        }
-                    }
-                    else
-                    {
-                        // Reader is null, close must of happened in the middle of this read
-                        return Task.FromException<int>(ADP.ExceptionWithStackTrace(ADP.ObjectDisposed(this)));
-                    }
-                }
-
-                if (_lastResult?.Result == charsRead)
-                {
-                    return _lastResult;
-                }
-                Task<int> result = Task.FromResult(charsRead);
-                _lastResult = result;
-                return result;
-            }
-        }
-
-        private static void ReadAsyncContinuation(Task<int> t, object rawState)
-        {
-            var state = (Tuple<SqlSequentialTextReader, char[], int, int, int, int, byte[], TaskCompletionSource<int>>)rawState;
-            SqlSequentialTextReader textReader = state.Item1;
-            char[] buffer = state.Item2;
-            int charsRead = state.Item3;
-            int adjustedIndex = state.Item4;
-            int charsNeeded = state.Item5;
-            int byteBufferUsed = state.Item6;
-            byte[] byteBuffer = state.Item7;
-            TaskCompletionSource<int> completion = state.Rest;
-
-            // If we completed but the textreader is closed, then report cancellation
-            if ((t.Status == TaskStatus.RanToCompletion) && (!textReader.IsClosed))
             {
                 try
                 {
-                    int bytesReadFromStream = t.Result;
-                    byteBufferUsed += bytesReadFromStream;
-                    if (byteBufferUsed > 0)
+                    Task original = Interlocked.CompareExchange<Task>(ref _currentTask, completion.Task, null);
+                    if (original != null)
                     {
-                        charsRead += textReader.DecodeBytesToChars(byteBuffer, byteBufferUsed, buffer, adjustedIndex, charsNeeded);
+                        completion.SetException(ADP.ExceptionWithStackTrace(ADP.AsyncOperationPending()));
                     }
-                    completion.SetResult(charsRead);
+                    else
+                    {
+                        bool completedSynchronously = true;
+                        int charsRead = 0;
+                        int adjustedIndex = index;
+                        int charsNeeded = count;
+
+                        // Load in peeked char
+                        if ((HasPeekedChar) && (charsNeeded > 0))
+                        {
+                            // Take a copy of _peekedChar in case it is cleared during close
+                            int peekedChar = _peekedChar;
+                            if (peekedChar >= char.MinValue)
+                            {
+                                Debug.Assert((_peekedChar >= char.MinValue) && (_peekedChar <= char.MaxValue), string.Format("Bad peeked character: {0}", _peekedChar));
+                                buffer[adjustedIndex] = (char)peekedChar;
+                                adjustedIndex++;
+                                charsRead++;
+                                charsNeeded--;
+                                _peekedChar = -1;
+                            }
+                        }
+
+                        int byteBufferUsed;
+                        byte[] byteBuffer = PrepareByteBuffer(charsNeeded, out byteBufferUsed);
+
+                        // Permit a 0 byte read in order to advance the reader to the correct column
+                        if ((byteBufferUsed < byteBuffer.Length) || (byteBuffer.Length == 0))
+                        {
+                            int bytesRead;
+                            var reader = _reader;
+                            if (reader != null)
+                            {
+                                Task<int> getBytesTask = reader.GetBytesAsync(_columnIndex, byteBuffer, byteBufferUsed, byteBuffer.Length - byteBufferUsed, Timeout.Infinite, _disposalTokenSource.Token, out bytesRead);
+                                if (getBytesTask == null)
+                                {
+                                    byteBufferUsed += bytesRead;
+                                }
+                                else
+                                {
+                                    // We need more data - setup the callback, and mark this as not completed sync
+                                    completedSynchronously = false;
+                                    getBytesTask.ContinueWith((t) =>
+                                    {
+                                        _currentTask = null;
+                                        // If we completed but the textreader is closed, then report cancellation
+                                        if ((t.Status == TaskStatus.RanToCompletion) && (!IsClosed))
+                                        {
+                                            try
+                                            {
+                                                int bytesReadFromStream = t.Result;
+                                                byteBufferUsed += bytesReadFromStream;
+                                                if (byteBufferUsed > 0)
+                                                {
+                                                    charsRead += DecodeBytesToChars(byteBuffer, byteBufferUsed, buffer, adjustedIndex, charsNeeded);
+                                                }
+                                                completion.SetResult(charsRead);
+                                            }
+                                            catch (Exception ex)
+                                            {
+                                                completion.SetException(ex);
+                                            }
+                                        }
+                                        else if (IsClosed)
+                                        {
+                                            completion.SetException(ADP.ExceptionWithStackTrace(ADP.ObjectDisposed(this)));
+                                        }
+                                        else if (t.Status == TaskStatus.Faulted)
+                                        {
+                                            if (t.Exception.InnerException is SqlException)
+                                            {
+                                                // ReadAsync can't throw a SqlException, so wrap it in an IOException
+                                                completion.SetException(ADP.ExceptionWithStackTrace(ADP.ErrorReadingFromStream(t.Exception.InnerException)));
+                                            }
+                                            else
+                                            {
+                                                completion.SetException(t.Exception.InnerException);
+                                            }
+                                        }
+                                        else
+                                        {
+                                            completion.SetCanceled();
+                                        }
+                                    }, TaskScheduler.Default);
+                                }
+
+
+                                if ((completedSynchronously) && (byteBufferUsed > 0))
+                                {
+                                    // No more data needed, decode what we have
+                                    charsRead += DecodeBytesToChars(byteBuffer, byteBufferUsed, buffer, adjustedIndex, charsNeeded);
+                                }
+                            }
+                            else
+                            {
+                                // Reader is null, close must of happened in the middle of this read
+                                completion.SetException(ADP.ExceptionWithStackTrace(ADP.ObjectDisposed(this)));
+                            }
+                        }
+
+
+                        if (completedSynchronously)
+                        {
+                            _currentTask = null;
+                            if (IsClosed)
+                            {
+                                completion.SetCanceled();
+                            }
+                            else
+                            {
+                                completion.SetResult(charsRead);
+                            }
+                        }
+                    }
                 }
                 catch (Exception ex)
                 {
-                    completion.SetException(ex);
+                    // In case of any errors, ensure that the completion is completed and the task is set back to null if we switched it
+                    completion.TrySetException(ex);
+                    Interlocked.CompareExchange(ref _currentTask, null, completion.Task);
+                    throw;
                 }
             }
-            else if (textReader.IsClosed)
-            {
-                completion.SetException(ADP.ExceptionWithStackTrace(ADP.ObjectDisposed(textReader)));
-            }
-            else if (t.Status == TaskStatus.Faulted)
-            {
-                if (t.Exception.InnerException is SqlException)
-                {
-                    // ReadAsync can't throw a SqlException, so wrap it in an IOException
-                    completion.SetException(ADP.ExceptionWithStackTrace(ADP.ErrorReadingFromStream(t.Exception.InnerException)));
-                }
-                else
-                {
-                    completion.SetException(t.Exception.InnerException);
-                }
-            }
-            else
-            {
-                completion.SetCanceled();
-            }
+
+            return completion.Task;
         }
 
         protected override void Dispose(bool disposing)
@@ -262,6 +292,13 @@ namespace System.Data.SqlClient
             _disposalTokenSource.Cancel();
             _reader = null;
             _peekedChar = -1;
+
+            // Wait for pending task
+            var currentTask = _currentTask;
+            if (currentTask != null)
+            {
+                ((IAsyncResult)currentTask).AsyncWaitHandle.WaitOne();
+            }
         }
 
         /// <summary>

@@ -38,27 +38,27 @@ namespace System.Data.SqlClient.ManualTesting.Tests
 
         private static void RunAllTestsForSingleServer(string connectionString, bool usingNamePipes = false)
         {
-            //RowBuffer(connectionString);
-            //InvalidRead(connectionString);
-            //VariantRead(connectionString);
-            //TypeRead(connectionString);
-            //SQLTypeRead(connectionString);
-            //GetValueOfTRead(connectionString);
-            //MultipleResults(connectionString);
-            //NumericRead(connectionString);
-            //TimestampRead(connectionString);
-            //OrphanReader(connectionString);
-            //BufferSize(connectionString);
-            //ExecuteXmlReaderTest(connectionString);
-            //SequentialAccess(connectionString);
-            //HasRowsTest(connectionString);
-            //CloseConnection(connectionString);
-            //OpenConnection(connectionString);
-            //SqlCharsBytesTest(connectionString);
-            //GetStream(connectionString);
-            //GetTextReader(connectionString);
-            //GetXmlReader(connectionString);
-            //ReadStream(connectionString);
+            RowBuffer(connectionString);
+            InvalidRead(connectionString);
+            VariantRead(connectionString);
+            TypeRead(connectionString);
+            SQLTypeRead(connectionString);
+            GetValueOfTRead(connectionString);
+            MultipleResults(connectionString);
+            NumericRead(connectionString);
+            TimestampRead(connectionString);
+            OrphanReader(connectionString);
+            BufferSize(connectionString);
+            ExecuteXmlReaderTest(connectionString);
+            SequentialAccess(connectionString);
+            HasRowsTest(connectionString);
+            CloseConnection(connectionString);
+            OpenConnection(connectionString);
+            SqlCharsBytesTest(connectionString);
+            GetStream(connectionString);
+            GetTextReader(connectionString);
+            GetXmlReader(connectionString);
+            ReadStream(connectionString);
             ReadTextReader(connectionString);
             StreamingBlobDataTypes(connectionString);
             OutOfOrderGetChars(connectionString);

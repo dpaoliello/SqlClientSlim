@@ -2434,7 +2434,7 @@ namespace System.Data.SqlClient
         // This method should only be called by ReadSni!  If not - it may have problems with timeouts!
         private void ReadSniError(TdsParserStateObject stateObj, SNIError sniError)
         {
-            if (TdsEnums.SNI_WAIT_TIMEOUT == sniError.nativeError)
+            if (sniError.sniError == SNIErrorCode.ConnTimeoutError)
             {
                 Debug.Assert(_syncOverAsync, "Should never reach here with async on!");
                 bool fail = false;

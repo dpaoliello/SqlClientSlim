@@ -84,21 +84,33 @@ namespace System.Data.SqlClient.ManualTesting.Tests
             return ex;
         }
 
-        public static TException AssertThrowsWrapper<TException, TInnerException>(Action actionThatFails, string exceptionMessage = null, string innerExceptionMessage = null, bool innerExceptionMustBeNull = false, Func<TException, bool> customExceptionVerifier = null) where TException : Exception
+        public static TException AssertThrowsWrapper<TException, TInnerException>(Action actionThatFails, string exceptionMessage = null, string innerExceptionMessage = null, bool innerExceptionMustBeNull = false, Func<TException, bool> customExceptionVerifier = null, Func<TInnerException, bool> customInnerExceptionVerifier = null)
+            where TException : Exception
+            where TInnerException : Exception
         {
-            TException ex = AssertThrowsWrapper<TException>(actionThatFails, exceptionMessage, innerExceptionMustBeNull, customExceptionVerifier);
+            TException ex = AssertThrowsWrapper(actionThatFails, exceptionMessage, innerExceptionMustBeNull, customExceptionVerifier);
 
-            if (innerExceptionMessage != null)
+            if (!innerExceptionMustBeNull)
             {
-                Assert.True(ex.InnerException != null, "FAILED: Cannot check innerExceptionMessage because InnerException is null.");
-                Assert.True(ex.InnerException.Message.Contains(innerExceptionMessage),
-                    string.Format("FAILED: Inner Exception did not contain expected message.\nExpected: {0}\nActual: {1}", innerExceptionMessage, ex.InnerException.Message));
+                Assert.True(ex.InnerException is TInnerException, "FAILED: InnerException is of the wrong type");
+                if (innerExceptionMessage != null)
+                {
+                    Assert.True(ex.InnerException.Message.Contains(innerExceptionMessage),
+                        string.Format("FAILED: Inner Exception did not contain expected message.\nExpected: {0}\nActual: {1}", innerExceptionMessage, ex.InnerException.Message));
+                }
+                if (customInnerExceptionVerifier != null)
+                {
+                    Assert.True(customInnerExceptionVerifier(ex.InnerException as TInnerException), "FAILED: Custom exception verifier returned false for this inner exception.");
+                }
             }
 
             return ex;
         }
 
-        public static TException AssertThrowsWrapper<TException, TInnerException, TInnerInnerException>(Action actionThatFails, string exceptionMessage = null, string innerExceptionMessage = null, string innerInnerExceptionMessage = null, bool innerInnerInnerExceptionMustBeNull = false) where TException : Exception where TInnerException : Exception where TInnerInnerException : Exception
+        public static TException AssertThrowsWrapper<TException, TInnerException, TInnerInnerException>(Action actionThatFails, string exceptionMessage = null, string innerExceptionMessage = null, string innerInnerExceptionMessage = null, bool innerInnerInnerExceptionMustBeNull = false)
+            where TException : Exception
+            where TInnerException : Exception
+            where TInnerInnerException : Exception
         {
             TException ex = AssertThrowsWrapper<TException, TInnerException>(actionThatFails, exceptionMessage, innerExceptionMessage);
             if (innerInnerInnerExceptionMustBeNull)
@@ -116,79 +128,6 @@ namespace System.Data.SqlClient.ManualTesting.Tests
             }
 
             return ex;
-        }
-
-        public static TException ExpectFailure<TException>(Action actionThatFails, string exceptionMessage = null, bool innerExceptionMustBeNull = false, Func<TException, bool> customExceptionVerifier = null) where TException : Exception
-        {
-            try
-            {
-                actionThatFails();
-                Console.WriteLine("ERROR: Did not get expected exception");
-                return null;
-            }
-            catch (Exception ex)
-            {
-                if ((CheckException<TException>(ex, exceptionMessage, innerExceptionMustBeNull)) && ((customExceptionVerifier == null) || (customExceptionVerifier(ex as TException))))
-                {
-                    return (ex as TException);
-                }
-                else
-                {
-                    throw;
-                }
-            }
-        }
-
-        public static TException ExpectFailure<TException, TInnerException>(Action actionThatFails, string exceptionMessage = null, string innerExceptionMessage = null, bool innerInnerExceptionMustBeNull = false) where TException : Exception where TInnerException : Exception
-        {
-            try
-            {
-                actionThatFails();
-                Console.WriteLine("ERROR: Did not get expected exception");
-                return null;
-            }
-            catch (Exception ex)
-            {
-                if ((CheckException<TException>(ex, exceptionMessage, false)) && (CheckException<TInnerException>(ex.InnerException, innerExceptionMessage, innerInnerExceptionMustBeNull)))
-                {
-                    return (ex as TException);
-                }
-                else
-                {
-                    throw;
-                }
-            }
-        }
-
-        public static TException ExpectFailure<TException, TInnerException, TInnerInnerException>(Action actionThatFails, string exceptionMessage = null, string innerExceptionMessage = null, string innerInnerExceptionMessage = null, bool innerInnerInnerExceptionMustBeNull = false) where TException : Exception where TInnerException : Exception where TInnerInnerException : Exception
-        {
-            try
-            {
-                actionThatFails();
-                Console.WriteLine("ERROR: Did not get expected exception");
-                return null;
-            }
-            catch (Exception ex)
-            {
-                if ((CheckException<TException>(ex, exceptionMessage, false)) && (CheckException<TInnerException>(ex.InnerException, innerExceptionMessage, false)) && (CheckException<TInnerInnerException>(ex.InnerException.InnerException, innerInnerExceptionMessage, innerInnerInnerExceptionMustBeNull)))
-                {
-                    return (ex as TException);
-                }
-                else
-                {
-                    throw;
-                }
-            }
-        }
-
-        public static void ExpectAsyncFailure<TException>(Func<Task> actionThatFails, string exceptionMessage = null, bool innerExceptionMustBeNull = false) where TException : Exception
-        {
-            ExpectFailure<AggregateException, TException>(() => actionThatFails().Wait(), null, exceptionMessage, innerExceptionMustBeNull);
-        }
-
-        public static void ExpectAsyncFailure<TException, TInnerException>(Func<Task> actionThatFails, string exceptionMessage = null, string innerExceptionMessage = null, bool innerInnerExceptionMustBeNull = false) where TException : Exception where TInnerException : Exception
-        {
-            ExpectFailure<AggregateException, TException, TInnerException>(() => actionThatFails().Wait(), null, exceptionMessage, innerExceptionMessage, innerInnerExceptionMustBeNull);
         }
     }
 }

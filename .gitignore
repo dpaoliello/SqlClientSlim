@@ -22,6 +22,7 @@ project.lock.json
 
 # Devs can hardcode passwords in their test file without sharing with the rest of the world
 /RunTests.cmd
+/RunTests.ps1
 
 # Temporary folder used to store testing collateral
 /Temp/

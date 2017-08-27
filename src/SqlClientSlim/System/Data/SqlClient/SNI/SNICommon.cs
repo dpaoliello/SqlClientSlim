@@ -17,7 +17,7 @@ namespace System.Data.SqlClient.SNI
     /// <summary>
     /// SNI provider identifiers
     /// </summary>
-    internal enum SNIProviders
+    internal enum SNIProviders : byte
     {
         HTTP_PROV, // HTTP Provider
         NP_PROV, // Named Pipes Provider
@@ -58,24 +58,29 @@ namespace System.Data.SqlClient.SNI
         SMUX_DATA = 8       // SMUX data packet
     }
 
+    internal enum SNIErrorCode : ushort
+    {
+        NoError = 0,
+
+        // Each error number maps to SNI_ERROR_* in String.resx
+        ConnTerminatedError = 2,
+        InvalidParameterError = 5,
+        ProtocolNotSupportedError = 8,
+        ConnTimeoutError = 11,
+        ConnNotUsableError = 19,
+        InvalidConnStringError = 25,
+        HandshakeFailureError = 31,
+        InternalExceptionError = 35,
+        ConnOpenFailedError = 40,
+        LocalDBErrorCode = 50,
+        MultiSubnetFailoverWithMoreThan64IPs = 47,
+        MultiSubnetFailoverWithInstanceSpecified = 48,
+        MultiSubnetFailoverWithNonTcpProtocol = 49,
+        MaxErrorValue = 50157,
+    }
+
     internal class SNICommon
     {
-        // Each error number maps to SNI_ERROR_* in String.resx
-        internal const int ConnTerminatedError = 2;
-        internal const int InvalidParameterError = 5;
-        internal const int ProtocolNotSupportedError = 8;
-        internal const int ConnTimeoutError = 11;
-        internal const int ConnNotUsableError = 19;
-        internal const int InvalidConnStringError = 25;
-        internal const int HandshakeFailureError = 31;
-        internal const int InternalExceptionError = 35;
-        internal const int ConnOpenFailedError = 40;
-        internal const int LocalDBErrorCode = 50;
-        internal const int MultiSubnetFailoverWithMoreThan64IPs = 47;
-        internal const int MultiSubnetFailoverWithInstanceSpecified = 48;
-        internal const int MultiSubnetFailoverWithNonTcpProtocol = 49;
-        internal const int MaxErrorValue = 50157;
-
         /// <summary>
         /// Validate server certificate callback for SSL
         /// </summary>

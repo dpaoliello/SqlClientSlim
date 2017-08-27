@@ -121,29 +121,6 @@ namespace System.Data.SqlClient.ManualTesting.Tests
             sqlConnection.Close();
         }
 
-        private static bool CheckThatExceptionsAreDistinctButHaveSameData(SqlException e1, SqlException e2)
-        {
-            Assert.True(e1 != e2, "FAILED: verification of exception cloning in subsequent connection attempts");
-
-            Assert.False((e1 == null) || (e2 == null), "FAILED: One of exceptions is null, another is not");
-
-            bool equal = (e1.Message == e2.Message) && (e1.HelpLink == e2.HelpLink) && (e1.InnerException == e2.InnerException)
-                && (e1.Source == e2.Source) && (e1.Data.Count == e2.Data.Count) && (e1.Errors == e2.Errors);
-            IDictionaryEnumerator enum1 = e1.Data.GetEnumerator();
-            IDictionaryEnumerator enum2 = e2.Data.GetEnumerator();
-            while (equal)
-            {
-                if (!enum1.MoveNext())
-                    break;
-                enum2.MoveNext();
-                equal = (enum1.Key == enum2.Key) && (enum2.Value == enum2.Value);
-            }
-
-            Assert.True(equal, string.Format("FAILED: exceptions do not contain the same data (besides call stack):\nFirst: {0}\nSecond: {1}\n", e1, e2));
-
-            return true;
-        }
-
         [CheckConnStrSetupFact]
         public static void ExceptionTests()
         {
@@ -163,9 +140,6 @@ namespace System.Data.SqlClient.ManualTesting.Tests
             badBuilder = new SqlConnectionStringBuilder(builder.ConnectionString) { InitialCatalog = "NotADatabase" };
             errorMessage = string.Format(CultureInfo.InvariantCulture, "Cannot open database \"{0}\" requested by the login. The login failed.", badBuilder.InitialCatalog);
             SqlException firstAttemptException = VerifyConnectionFailure<SqlException>(() => GenerateConnectionException(badBuilder.ConnectionString), errorMessage, (ex) => VerifyException(ex, 2, 4060, 1, 11));
-
-            // Verify that the same error results in a different instance of an exception, but with the same data
-            VerifyConnectionFailure<SqlException>(() => GenerateConnectionException(badBuilder.ConnectionString), errorMessage, (ex) => CheckThatExceptionsAreDistinctButHaveSameData(firstAttemptException, ex));
 
             // tests incorrect user name - exception thrown from adapter
             badBuilder = new SqlConnectionStringBuilder(builder.ConnectionString) { UserID = "NotAUser" };

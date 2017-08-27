@@ -3056,6 +3056,7 @@ namespace System.Data.SqlClient
                 {
                     return false;
                 }
+                nextColumnDataToRead = _sharedState._nextColumnDataToRead;
                 Debug.Assert(nextColumnDataToRead == nextColumnHeaderToRead);
             }
 

@@ -69,7 +69,7 @@ namespace System.Data.SqlClient.ManualTesting.Tests
                 cmd.CommandText = "WAITFOR DELAY '00:00:30';select * from Customers";
 
                 string errorMessage = SystemDataResourceManager.Instance.SQL_Timeout;
-                DataTestUtility.ExpectFailure<SqlException>(() => cmd.ExecuteReader(), errorMessage);
+                DataTestUtility.AssertThrowsWrapper<SqlException>(() => cmd.ExecuteReader(), errorMessage);
 
                 VerifyConnection(cmd);
             }
@@ -130,7 +130,7 @@ namespace System.Data.SqlClient.ManualTesting.Tests
             Barrier threadsReady = stateTuple.Item3;
 
             string errorMessage = SystemDataResourceManager.Instance.SQL_OperationCancelled;
-            DataTestUtility.ExpectFailure<SqlException>(() =>
+            DataTestUtility.AssertThrowsWrapper<SqlException>(() =>
             {
                 threadsReady.SignalAndWait();
                 using (SqlDataReader r = command.ExecuteReader())
@@ -177,8 +177,7 @@ namespace System.Data.SqlClient.ManualTesting.Tests
                     reader.SetDefaultTimeout(1);
                     proxy.PauseCopying();
                     string errorMessage = SystemDataResourceManager.Instance.SQL_Timeout;
-                    Exception exception = Assert.Throws<SqlException>(() => reader.GetValue(0));
-                    Assert.True(exception.Message.Contains(errorMessage));
+                    DataTestUtility.AssertThrowsWrapper<SqlException>(() => reader.GetValue(0), errorMessage);
 
                     // Return everything to normal and close
                     proxy.ResumeCopying();

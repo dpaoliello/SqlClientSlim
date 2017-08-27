@@ -59,7 +59,7 @@ namespace System.Data.SqlClient.SNI
                     if (serverAddresses.Length > MaxParallelIpAddresses)
                     {
                         // Fail if above 64 to match legacy behavior
-                        sniError = new SNIError(SNIProviders.TCP_PROV, 0, SNICommon.MultiSubnetFailoverWithMoreThan64IPs, string.Empty);
+                        sniError = new SNIError(SNIProviders.TCP_PROV, 0, SNIErrorCode.MultiSubnetFailoverWithMoreThan64IPs, string.Empty);
                         return;
                     }
 
@@ -72,7 +72,7 @@ namespace System.Data.SqlClient.SNI
 
                 if (!(isInfiniteTimeOut ? connectTask.Wait(-1) : connectTask.Wait(ts)))
                 {
-                    sniError = new SNIError(SNIProviders.TCP_PROV, 0, SNICommon.ConnOpenFailedError, SQLMessage.Timeout());
+                    sniError = new SNIError(SNIProviders.TCP_PROV, 0, SNIErrorCode.ConnOpenFailedError, SQLMessage.Timeout());
                     return;
                 }
 
@@ -183,7 +183,7 @@ namespace System.Data.SqlClient.SNI
             else
             {
                 // otherwise it is timeout for 0 or less than -1
-                return new SNIError(SNIProviders.TCP_PROV, 0, SNICommon.ConnTimeoutError, string.Empty);
+                return new SNIError(SNIProviders.TCP_PROV, 0, SNIErrorCode.ConnTimeoutError, string.Empty);
             }
         }
 

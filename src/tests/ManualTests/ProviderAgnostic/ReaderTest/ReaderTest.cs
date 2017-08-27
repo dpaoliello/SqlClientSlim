@@ -15,8 +15,9 @@ namespace System.Data.SqlClient.ManualTesting.Tests
         [CheckConnStrSetupFact]
         public static void TestMain()
         {
-            string connectionString = DataTestUtility.TcpConnStr;
+            string connectionString = new SqlConnectionStringBuilder(DataTestUtility.TcpConnStr) { InitialCatalog = "pubs" }.ToString();
 
+            bool tempTableCreated = false;
             string tempTable = DataTestUtility.GetUniqueName("T", "[", "]");
             string tempKey = DataTestUtility.GetUniqueName("K", "[", "]");
 
@@ -36,6 +37,7 @@ namespace System.Data.SqlClient.ManualTesting.Tests
                         #region <<Create temp table>>
                         cmd.CommandText = "SELECT au_id, au_lname, au_fname, phone, address, city, state, zip, contract into " + tempTable + " from authors where au_id='UNKNOWN-ID'";
                         cmd.ExecuteNonQuery();
+                        tempTableCreated = true;
 
                         cmd.CommandText = "alter table " + tempTable + " add constraint " + tempKey + " primary key (au_id)";
                         cmd.ExecuteNonQuery();
@@ -248,16 +250,19 @@ namespace System.Data.SqlClient.ManualTesting.Tests
             }
             finally
             {
-                using (DbConnection con = provider.CreateConnection())
+                if (tempTableCreated)
                 {
-                    con.ConnectionString = connectionString;
-                    con.Open();
-
-                    using (DbCommand cmd = provider.CreateCommand())
+                    using (DbConnection con = provider.CreateConnection())
                     {
-                        cmd.Connection = con;
-                        cmd.CommandText = "drop table " + tempTable;
-                        cmd.ExecuteNonQuery();
+                        con.ConnectionString = connectionString;
+                        con.Open();
+
+                        using (DbCommand cmd = provider.CreateCommand())
+                        {
+                            cmd.Connection = con;
+                            cmd.CommandText = "drop table " + tempTable;
+                            cmd.ExecuteNonQuery();
+                        }
                     }
                 }
             }

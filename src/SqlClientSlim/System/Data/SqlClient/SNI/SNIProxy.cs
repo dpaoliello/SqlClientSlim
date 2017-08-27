@@ -22,7 +22,7 @@ namespace System.Data.SqlClient.SNI
             }
             catch (Exception e)
             {
-                return new SNIError(SNIProviders.SSL_PROV, SNICommon.HandshakeFailureError, e);
+                return new SNIError(SNIProviders.SSL_PROV, SNIErrorCode.HandshakeFailureError, e);
             }
         }
 
@@ -70,7 +70,7 @@ namespace System.Data.SqlClient.SNI
 
             if (serverNameParts.Length > 2)
             {
-                sniError = new SNIError(SNIProviders.INVALID_PROV, 0, SNICommon.InvalidConnStringError, string.Empty);
+                sniError = new SNIError(SNIProviders.INVALID_PROV, 0, SNIErrorCode.InvalidConnStringError, string.Empty);
                 return null;
             }
 
@@ -95,11 +95,11 @@ namespace System.Data.SqlClient.SNI
                     default:
                         if (parallel)
                         {
-                            sniError = new SNIError(SNIProviders.INVALID_PROV, 0, SNICommon.MultiSubnetFailoverWithNonTcpProtocol, string.Empty);
+                            sniError = new SNIError(SNIProviders.INVALID_PROV, 0, SNIErrorCode.MultiSubnetFailoverWithNonTcpProtocol, string.Empty);
                         }
                         else
                         {
-                            sniError = new SNIError(SNIProviders.INVALID_PROV, 0, SNICommon.ProtocolNotSupportedError, string.Empty);
+                            sniError = new SNIError(SNIProviders.INVALID_PROV, 0, SNIErrorCode.ProtocolNotSupportedError, string.Empty);
                         }
                         handle = null;
                         break;
@@ -137,13 +137,13 @@ namespace System.Data.SqlClient.SNI
                 }
                 catch (Exception e)
                 {
-                    sniError = new SNIError(SNIProviders.TCP_PROV, SNICommon.InvalidConnStringError, e);
+                    sniError = new SNIError(SNIProviders.TCP_PROV, SNIErrorCode.InvalidConnStringError, e);
                     return null;
                 }
             }
             else if (serverAndPortParts.Length > 2)
             {
-                sniError = new SNIError(SNIProviders.TCP_PROV, 0, SNICommon.InvalidConnStringError, string.Empty);
+                sniError = new SNIError(SNIProviders.TCP_PROV, 0, SNIErrorCode.InvalidConnStringError, string.Empty);
                 return null;
             }
 
@@ -162,13 +162,13 @@ namespace System.Data.SqlClient.SNI
         {
             if (parallel)
             {
-                sniError = new SNIError(SNIProviders.NP_PROV, 0, SNICommon.MultiSubnetFailoverWithNonTcpProtocol, string.Empty);
+                sniError = new SNIError(SNIProviders.NP_PROV, 0, SNIErrorCode.MultiSubnetFailoverWithNonTcpProtocol, string.Empty);
                 return null;
             }
 
             if(fullServerName.Length == 0 || fullServerName.Contains("/")) // Pipe paths only allow back slashes
             {
-                sniError = new SNIError(SNIProviders.NP_PROV, 0, SNICommon.InvalidConnStringError, string.Empty);
+                sniError = new SNIError(SNIProviders.NP_PROV, 0, SNIErrorCode.InvalidConnStringError, string.Empty);
                 return null;
             }
 
@@ -188,7 +188,7 @@ namespace System.Data.SqlClient.SNI
                     string pipeToken = "/pipe/";
                     if (!resourcePath.StartsWith(pipeToken))
                     {
-                        sniError = new SNIError(SNIProviders.NP_PROV, 0, SNICommon.InvalidConnStringError, string.Empty);
+                        sniError = new SNIError(SNIProviders.NP_PROV, 0, SNIErrorCode.InvalidConnStringError, string.Empty);
                         return null;
                     }
                     pipeName = resourcePath.Substring(pipeToken.Length);
@@ -196,7 +196,7 @@ namespace System.Data.SqlClient.SNI
                 }
                 catch(UriFormatException)
                 {
-                    sniError = new SNIError(SNIProviders.NP_PROV, 0, SNICommon.InvalidConnStringError, string.Empty);
+                    sniError = new SNIError(SNIProviders.NP_PROV, 0, SNIErrorCode.InvalidConnStringError, string.Empty);
                     return null;
                 }
             }

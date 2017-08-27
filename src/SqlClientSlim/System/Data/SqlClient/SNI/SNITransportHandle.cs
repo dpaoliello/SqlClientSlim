@@ -280,10 +280,10 @@ namespace System.Data.SqlClient.SNI
                 }
                 catch (IOException ioe)
                 {
-                    uint errorCode = 0;
+                    SNIErrorCode errorCode = SNIErrorCode.NoError;
                     if (ioe.InnerException is SocketException && ((SocketException)(ioe.InnerException)).SocketErrorCode == SocketError.TimedOut)
                     {
-                        errorCode = TdsEnums.SNI_WAIT_TIMEOUT;
+                        errorCode = SNIErrorCode.ConnTimeoutError;
                     }
 
                     packet = null;

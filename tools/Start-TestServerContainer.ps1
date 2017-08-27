@@ -1,7 +1,6 @@
 # Starts a SQL Server container using docker that can be used to test SqlClientSlim.
 
 Invoke-Expression "$PSScriptRoot\Import-DockerPowershell.ps1"
-$tempDir = "$PSScriptRoot\..\Temp"
 
 # Check for existing SQL docker containers
 if ((Get-Container -Name 'SqlClientSlimTest' -ErrorAction Stop).Count -ne 0) {

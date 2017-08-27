@@ -211,7 +211,7 @@ namespace System.Data.SqlClient.SNI
 
                 if (packet._length == 0)
                 {
-                    error = new SNIError(SNIProviders.TCP_PROV, 0, SNICommon.ConnTerminatedError, string.Empty);
+                    error = new SNIError(SNIProviders.TCP_PROV, 0, SNIErrorCode.ConnTerminatedError, string.Empty);
                 }
             }
 

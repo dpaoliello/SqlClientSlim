@@ -1140,7 +1140,7 @@ namespace System.Data.SqlClient
                 sqlContextInfo, providerName, (int)sniError.sniError, errorMessage);
 
             return new SqlError((int)sniError.nativeError, 0x00, TdsEnums.FATAL_ERROR_CLASS,
-                                _server, errorMessage, sniError.function, (int)sniError.lineNumber, win32ErrorCode, sniError.exception);
+                                _server, errorMessage, string.Empty, 0, win32ErrorCode, sniError.exception);
         }
 
         internal void CheckResetConnection(TdsParserStateObject stateObj)
@@ -3105,22 +3105,22 @@ namespace System.Data.SqlClient
                 return false;
             }
 
-            // always read as sql types
-            Debug.Assert(valLen < (ulong)(Int32.MaxValue), "ProcessReturnValue received data size > 2Gb");
-
-            int intlen = valLen > (ulong)(Int32.MaxValue) ? Int32.MaxValue : (int)valLen;
-
-            if (rec.metaType.IsPlp)
-            {
-                intlen = Int32.MaxValue;    // If plp data, read it all
-            }
-
             if (!valLen.HasValue)
             {
                 GetNullSqlValue(rec.value, rec);
             }
             else
             {
+                // always read as sql types
+                Debug.Assert(valLen < (ulong)(Int32.MaxValue), "ProcessReturnValue received data size > 2Gb");
+
+                int intlen = valLen > (ulong)(Int32.MaxValue) ? Int32.MaxValue : (int)valLen;
+
+                if (rec.metaType.IsPlp)
+                {
+                    intlen = Int32.MaxValue;    // If plp data, read it all
+                }
+
                 if (!TryReadSqlValue(rec.value, rec, intlen, stateObj))
                 {
                     return false;

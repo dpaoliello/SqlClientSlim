@@ -133,7 +133,7 @@ namespace System.Data.SqlClient.ManualTesting.Tests
         private bool RunTestCoreAndCompareWithBaseline()
         {
             string outputPath = "MultipleResultsTest.out";
-            string baselinePath = "MultipleResultsTest.bsl";
+            string baselinePath = @"ProviderAgnostic\MultipleResultsTest\MultipleResultsTest.bsl";
 
             var fstream = new FileStream(outputPath, FileMode.Create, FileAccess.Write, FileShare.Read);
             var swriter = new StreamWriter(fstream, Encoding.UTF8);

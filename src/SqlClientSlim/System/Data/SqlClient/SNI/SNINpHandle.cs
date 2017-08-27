@@ -40,18 +40,18 @@ namespace System.Data.SqlClient.SNI
             }
             catch(TimeoutException te)
             {
-                error = new SNIError(SNIProviders.NP_PROV, SNICommon.ConnTimeoutError, te);
+                error = new SNIError(SNIProviders.NP_PROV, SNIErrorCode.ConnTimeoutError, te);
                 return;
             }
             catch(IOException ioe)
             {
-                error = new SNIError(SNIProviders.NP_PROV, SNICommon.ConnOpenFailedError, ioe);
+                error = new SNIError(SNIProviders.NP_PROV, SNIErrorCode.ConnOpenFailedError, ioe);
                 return;
             }
 
             if (!_pipeStream.IsConnected || !_pipeStream.CanWrite || !_pipeStream.CanRead)
             {
-                error = new SNIError(SNIProviders.NP_PROV, 0, SNICommon.ConnOpenFailedError, string.Empty);
+                error = new SNIError(SNIProviders.NP_PROV, 0, SNIErrorCode.ConnOpenFailedError, string.Empty);
                 return;
             }
 

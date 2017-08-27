@@ -47,7 +47,8 @@ namespace System.Data.SqlClient.ManualTesting.Tests
             string connString =
                 (new SqlConnectionStringBuilder(DataTestUtility.TcpConnStr) 
                 {
-                    MaxPoolSize = 1
+                    MaxPoolSize = 1,
+                    InitialCatalog = "pubs"
                 }
                 ).ConnectionString;
 

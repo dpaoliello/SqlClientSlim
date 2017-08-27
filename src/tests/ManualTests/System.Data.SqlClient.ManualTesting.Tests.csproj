@@ -10,6 +10,20 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Remove="DDBasics\DDDataTypesTest\data.xml" />
+    <None Remove="ProviderAgnostic\MultipleResultsTest\MultipleResultsTest.bsl" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="DDBasics\DDDataTypesTest\data.xml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="ProviderAgnostic\MultipleResultsTest\MultipleResultsTest.bsl">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\SqlClientSlim\SqlClientSlim.csproj" />
   </ItemGroup>
 
